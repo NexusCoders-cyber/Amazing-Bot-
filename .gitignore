@@ -1,0 +1,303 @@
+# Dependencies
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+.pnpm-debug.log*
+
+# Runtime data
+pids
+*.pid
+*.seed
+*.pid.lock
+
+# Coverage directory used by tools like istanbul
+coverage/
+*.lcov
+
+# nyc test coverage
+.nyc_output
+
+# Grunt intermediate storage
+.grunt
+
+# Bower dependency directory
+bower_components
+
+# node-waf configuration
+.lock-wscript
+
+# Compiled binary addons
+build/Release
+
+# Dependency directories
+node_modules/
+jspm_packages/
+
+# Snowpack dependency directory
+web_modules/
+
+# TypeScript cache
+*.tsbuildinfo
+
+# Optional npm cache directory
+.npm
+
+# Optional eslint cache
+.eslintcache
+
+# Optional stylelint cache
+.stylelintcache
+
+# Microbundle cache
+.rpt2_cache/
+.rts2_cache_cjs/
+.rts2_cache_es/
+.rts2_cache_umd/
+
+# Optional REPL history
+.node_repl_history
+
+# Output of 'npm pack'
+*.tgz
+
+# Yarn Integrity file
+.yarn-integrity
+
+# Environment variables
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+.env.*.local
+
+# parcel-bundler cache
+.cache
+.parcel-cache
+
+# Next.js build output
+.next
+out
+
+# Nuxt.js build / generate output
+.nuxt
+dist
+
+# Gatsby files
+.cache/
+public
+
+# Storybook build outputs
+.out
+.storybook-out
+storybook-static
+
+# Temporary folders
+tmp/
+temp/
+.tmp/
+
+# Runtime data
+*.log
+*.out
+*.err
+
+# WhatsApp Bot Specific Files
+# Session data (contains authentication)
+session/
+auth_info_baileys/
+*.session
+*.session-journal
+
+# Logs
+logs/
+*.log
+pm2.log
+pm2-error.log
+pm2-out.log
+combined.log
+error.log
+commands.log
+api.log
+debug.log
+
+# Media and temporary files
+temp/
+media/cache/
+media/downloads/
+media/profile/
+media/stickers/
+backups/
+uploads/
+
+# Database files (if using local database)
+*.db
+*.sqlite
+*.sqlite3
+data/
+
+# Cache files
+.cache/
+cache/
+.redis/
+
+# Docker
+Dockerfile.local
+docker-compose.override.yml
+docker-compose.local.yml
+
+# PM2
+ecosystem.config.local.js
+.pm2/
+
+# IDE and Editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# Test coverage
+coverage/
+.nyc_output/
+
+# Security and sensitive files
+*.key
+*.cert
+*.crt
+*.pem
+config/ssl/
+ssl/
+secrets/
+
+# Build artifacts
+build/
+dist/
+out/
+
+# Package manager
+package-lock.json*
+yarn.lock*
+pnpm-lock.yaml*
+
+# Local configuration
+config/local.json
+config/development.json
+config/production.json
+config/test.json
+
+# Monitoring and analytics
+.pm2/
+monitoring/
+
+# Backup files
+*.backup
+*.bak
+*.old
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# JetBrains IDEs
+.idea/
+*.iml
+*.ipr
+*.iws
+
+# Visual Studio Code
+.vscode/
+*.code-workspace
+
+# Sublime Text
+*.sublime-project
+*.sublime-workspace
+
+# Vim
+*.swp
+*.swo
+*~
+
+# Emacs
+*~
+\#*\#
+/.emacs.desktop
+/.emacs.desktop.lock
+*.elc
+auto-save-list
+tramp
+.\#*
+
+# Local History for Visual Studio Code
+.history/
+
+# Windows Installer files
+*.cab
+*.msi
+*.msix
+*.msm
+*.msp
+
+# Windows shortcuts
+*.lnk
+
+# Linux
+*~
+
+# KDE directory preferences
+.directory
+
+# Linux trash folder which might appear on any partition or disk
+.Trash-*
+
+# .nfs files are created when an open file is removed but is still being accessed
+.nfs*
+
+# MacOS
+.AppleDouble
+.LSOverride
+Icon
+._*
+.DocumentRevisions-V100
+.fseventsd
+.Spotlight-V100
+.TemporaryItems
+.Trashes
+.VolumeIcon.icns
+.com.apple.timemachine.donotpresent
+.AppleDB
+.AppleDesktop
+Network Trash Folder
+Temporary Items
+.apdisk
+
+# Application specific
+screenshots/
+qr-codes/
+downloads/
+stickers/
+audio/
+video/
+documents/
+
+# Test files
+test-results/
+test-output/
+__tests__/fixtures/
+
+# Miscellaneous
+*.tgz
+*.tar.gz
+*.zip
+*.rar
+*.7z

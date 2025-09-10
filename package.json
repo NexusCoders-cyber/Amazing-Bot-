@@ -1,0 +1,243 @@
+{
+  "name": "ilom-whatsapp-bot",
+  "version": "1.0.0",
+  "description": "🧠 Amazing Bot 🧠 v1 created by Ilom - Advanced WhatsApp Bot with AI, Media Processing, and Comprehensive Features",
+  "main": "index.js",
+  "author": "Ilom",
+  "license": "MIT",
+  "keywords": [
+    "whatsapp",
+    "bot",
+    "ai",
+    "chatgpt",
+    "automation",
+    "media-processing",
+    "nodejs",
+    "baileys"
+  ],
+  "repository": {
+    "type": "git",
+    "url": ""
+  },
+  "homepage": "https://ilom.tech",
+  "bugs": {
+    "url": "https://github.com/ilom-tech/whatsapp-bot/issues"
+  },
+  "engines": {
+    "node": ">=16.0.0",
+    "npm": ">=7.0.0"
+  },
+  "scripts": {
+    "start": "node index.js",
+    "dev": "nodemon index.js",
+    "test": "jest --coverage",
+    "test:watch": "jest --watch",
+    "lint": "eslint . --ext .js --fix",
+    "format": "prettier --write .",
+    "build": "npm run lint && npm run test",
+    "docker:build": "docker build -t ilom-bot .",
+    "docker:run": "docker run -p 3000:3000 ilom-bot",
+    "pm2:start": "pm2 start ecosystem.config.js",
+    "pm2:stop": "pm2 stop ecosystem.config.js",
+    "pm2:restart": "pm2 restart ecosystem.config.js",
+    "backup": "node scripts/backup.js",
+    "restore": "node scripts/restore.js",
+    "migrate": "node scripts/migrate.js",
+    "seed": "node scripts/seed.js",
+    "cleanup": "node scripts/cleanup.js",
+    "update": "git pull && npm install && npm run migrate",
+    "logs": "pm2 logs ilom-bot",
+    "monitor": "pm2 monit"
+  },
+  "dependencies": {
+    "@google/generative-ai": "^0.2.1",
+    "@whiskeysockets/baileys": "^6.6.0",
+    "archiver": "^6.0.1",
+    "axios": "^1.6.2",
+    "bcryptjs": "^2.4.3",
+    "canvas": "^2.11.2",
+    "chalk": "^4.1.2",
+    "cheerio": "^1.0.0-rc.12",
+    "chokidar": "^3.5.3",
+    "compression": "^1.7.4",
+    "compromise": "^14.10.0",
+    "connect-mongo": "^5.1.0",
+    "cors": "^2.8.5",
+    "crypto": "^1.0.1",
+    "deepl": "^1.0.13",
+    "discord-player": "^6.6.6",
+    "dotenv": "^16.6.1",
+    "express": "^4.21.2",
+    "express-fileupload": "^1.4.3",
+    "express-rate-limit": "^7.1.5",
+    "express-session": "^1.17.3",
+    "express-validator": "^7.0.1",
+    "face-api.js": "^0.22.2",
+    "figlet": "^1.6.0",
+    "fluent-ffmpeg": "^2.1.2",
+    "form-data": "^4.0.0",
+    "franc": "^6.1.0",
+    "fs-extra": "^11.3.1",
+    "gm": "^1.25.0",
+    "google-translate-api": "^2.3.0",
+    "gradient-string": "^2.0.2",
+    "helmet": "^7.1.0",
+    "imagemin": "^8.0.1",
+    "imagemin-mozjpeg": "^10.0.0",
+    "imagemin-pngquant": "^9.0.2",
+    "jsdom": "^23.0.1",
+    "jsonwebtoken": "^9.0.2",
+    "lodash": "^4.17.21",
+    "mime-types": "^2.1.35",
+    "moment": "^2.30.1",
+    "mongoose": "^8.18.0",
+    "morgan": "^1.10.0",
+    "multer": "^1.4.5-lts.1",
+    "music-metadata": "^7.14.0",
+    "natural": "^6.8.0",
+    "node-cache": "^5.1.2",
+    "node-cron": "^3.0.3",
+    "node-fetch": "^3.3.2",
+    "node-html-to-image": "^4.0.0",
+    "node-id3": "^0.2.6",
+    "openai": "^4.20.1",
+    "papaparse": "^5.4.1",
+    "passport": "^0.7.0",
+    "passport-jwt": "^4.0.1",
+    "passport-local": "^1.0.0",
+    "path": "^0.12.7",
+    "pdf-parse": "^1.1.1",
+    "pino": "^8.21.0",
+    "play-dl": "^1.9.7",
+    "puppeteer": "^21.6.1",
+    "qrcode": "^1.5.3",
+    "redis": "^4.6.11",
+    "remove.bg": "^1.3.0",
+    "sentiment": "^5.0.2",
+    "sharp": "^0.32.6",
+    "socket.io": "^4.7.4",
+    "spotify-web-api-node": "^5.0.2",
+    "swagger-jsdoc": "^6.2.8",
+    "swagger-ui-express": "^5.0.0",
+    "tesseract.js": "^5.0.4",
+    "unzipper": "^0.10.14",
+    "upscaler": "^1.0.0-beta.19",
+    "uuid": "^9.0.1",
+    "validator": "^13.11.0",
+    "wa-sticker-formatter": "^4.4.4",
+    "winston": "^3.11.0",
+    "xlsx": "^0.18.5",
+    "youtube-sr": "^4.3.4",
+    "ytdl-core": "^4.11.5"
+  },
+  "overrides": {
+    "jimp": "1.6.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.5",
+    "concurrently": "^8.2.2",
+    "cross-env": "^7.0.3",
+    "eslint": "^8.56.0",
+    "eslint-config-standard": "^17.1.0",
+    "eslint-plugin-import": "^2.29.1",
+    "eslint-plugin-node": "^11.1.0",
+    "eslint-plugin-promise": "^6.1.1",
+    "husky": "^8.0.3",
+    "jest": "^29.7.0",
+    "lint-staged": "^15.2.0",
+    "nodemon": "^3.0.2",
+    "npm-run-all": "^4.1.5",
+    "prettier": "^3.1.1",
+    "rimraf": "^5.0.5",
+    "supertest": "^6.3.3",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.3.3"
+  },
+  "optionalDependencies": {
+    "pm2": "^5.3.0"
+  },
+  "lint-staged": {
+    "*.js": [
+      "eslint --fix",
+      "prettier --write",
+      "git add"
+    ],
+    "*.{json,md,yml,yaml}": [
+      "prettier --write",
+      "git add"
+    ]
+  },
+  "husky": {
+    "hooks": {
+      "pre-commit": "lint-staged",
+      "pre-push": "npm run test"
+    }
+  },
+  "jest": {
+    "testEnvironment": "node",
+    "collectCoverageFrom": [
+      "src/**/*.js",
+      "!src/**/*.test.js",
+      "!src/assets/**",
+      "!src/locales/**"
+    ],
+    "coverageDirectory": "coverage",
+    "coverageReporters": [
+      "text",
+      "lcov",
+      "html"
+    ],
+    "testMatch": [
+      "**/tests/**/*.test.js",
+      "**/__tests__/**/*.js"
+    ],
+    "setupFilesAfterEnv": [
+      "<rootDir>/tests/setup.js"
+    ]
+  },
+  "nodemonConfig": {
+    "watch": [
+      "src/",
+      "index.js"
+    ],
+    "ext": "js,json",
+    "ignore": [
+      "node_modules/",
+      "logs/",
+      "temp/",
+      "session/",
+      "media/",
+      "backups/"
+    ],
+    "delay": "2000"
+  },
+  "config": {
+    "port": 5000,
+    "database": {
+      "url": "mongodb://localhost:27017/ilombot"
+    },
+    "redis": {
+      "url": "redis://localhost:6379"
+    }
+  },
+  "funding": {
+    "type": "individual",
+    "url": "https://github.com/sponsors/ilom-tech"
+  },
+  "contributors": [
+    {
+      "name": "Ilom",
+      "email": "contact@ilom.tech",
+      "url": "https://ilom.tech"
+    }
+  ],
+  "os": [
+    "linux",
+    "darwin",
+    "win32"
+  ],
+  "cpu": [
+    "x64",
+    "arm64"
+  ]
+}

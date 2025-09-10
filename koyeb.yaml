@@ -1,0 +1,21 @@
+app:
+  name: ilom-whatsapp-bot
+  services:
+    - name: bot
+      git:
+        branch: main
+      instance_type: nano
+      env:
+        - key: NODE_ENV
+          value: production
+      ports:
+        - port: 5000
+          protocol: http
+      health_checks:
+        - http:
+            path: /health
+      regions:
+        - fra
+      scaling:
+        min: 1
+        max: 1
