@@ -17,6 +17,7 @@ class CommandHandler {
         this.commandExecutions = new Map();
         this.isInitialized = false;
         this.commandStats = new Map();
+        this.groupMetadataCache = new Map();
     }
 
     async initialize() {
@@ -116,10 +117,90 @@ class CommandHandler {
 
     normalizePhoneNumber(jid) {
         if (!jid) return '';
-        let cleaned = jid.replace(/@s\.whatsapp\.net|@c\.us|@g\.us|@broadcast/g, '');
+        let cleaned = String(jid);
+        cleaned = cleaned.replace(/@s\.whatsapp\.net|@c\.us|@g\.us|@broadcast|@lid/g, '');
         cleaned = cleaned.split(':')[0];
+        cleaned = cleaned.split('@')[0];
         cleaned = cleaned.replace(/[^0-9]/g, '');
         return cleaned;
+    }
+
+    async getGroupMetadata(sock, groupJid) {
+        try {
+            const cacheKey = groupJid;
+            const cached = this.groupMetadataCache.get(cacheKey);
+            
+            if (cached && (Date.now() - cached.timestamp) < 300000) {
+                return cached.data;
+            }
+            
+            const metadata = await sock.groupMetadata(groupJid);
+            this.groupMetadataCache.set(cacheKey, {
+                data: metadata,
+                timestamp: Date.now()
+            });
+            
+            return metadata;
+        } catch (error) {
+            logger.error('Error fetching group metadata:', error);
+            return null;
+        }
+    }
+
+    async isGroupAdmin(sock, groupJid, userJid) {
+        try {
+            const metadata = await this.getGroupMetadata(sock, groupJid);
+            if (!metadata || !metadata.participants) {
+                return false;
+            }
+
+            const userNumber = this.normalizePhoneNumber(userJid);
+            
+            for (const participant of metadata.participants) {
+                const participantNumber = this.normalizePhoneNumber(participant.id);
+                
+                if (participantNumber === userNumber) {
+                    const isAdmin = participant.admin === 'admin' || participant.admin === 'superadmin';
+                    logger.debug(`Admin check for ${userNumber}: ${isAdmin} (role: ${participant.admin})`);
+                    return isAdmin;
+                }
+            }
+            
+            return false;
+        } catch (error) {
+            logger.error('Error checking group admin:', error);
+            return false;
+        }
+    }
+
+    async isBotGroupAdmin(sock, groupJid) {
+        try {
+            if (!sock.user || !sock.user.id) {
+                return false;
+            }
+
+            const metadata = await this.getGroupMetadata(sock, groupJid);
+            if (!metadata || !metadata.participants) {
+                return false;
+            }
+
+            const botNumber = this.normalizePhoneNumber(sock.user.id);
+            
+            for (const participant of metadata.participants) {
+                const participantNumber = this.normalizePhoneNumber(participant.id);
+                
+                if (participantNumber === botNumber) {
+                    const isAdmin = participant.admin === 'admin' || participant.admin === 'superadmin';
+                    logger.debug(`Bot admin check: ${isAdmin} (role: ${participant.admin})`);
+                    return isAdmin;
+                }
+            }
+            
+            return false;
+        } catch (error) {
+            logger.error('Error checking bot admin:', error);
+            return false;
+        }
     }
 
     async extractRealPhoneNumber(message, sock) {
@@ -135,20 +216,6 @@ class CommandHandler {
             }
             
             if (isGroup && message.key.participant) {
-                try {
-                    const participantJid = message.key.participant;
-                    const contactInfo = await sock.onWhatsApp(participantJid);
-                    
-                    if (contactInfo && contactInfo[0] && contactInfo[0].jid) {
-                        const realNumber = this.normalizePhoneNumber(contactInfo[0].jid);
-                        if (realNumber && realNumber.length >= 10) {
-                            return realNumber;
-                        }
-                    }
-                } catch (err) {
-                    logger.debug('Could not fetch contact info for participant');
-                }
-                
                 const participantNumber = this.normalizePhoneNumber(message.key.participant);
                 if (participantNumber && participantNumber.length >= 10) {
                     return participantNumber;
@@ -156,22 +223,19 @@ class CommandHandler {
             }
             
             if (!isGroup) {
-                try {
-                    const contactInfo = await sock.onWhatsApp(from);
-                    
-                    if (contactInfo && contactInfo[0] && contactInfo[0].jid) {
-                        const realNumber = this.normalizePhoneNumber(contactInfo[0].jid);
-                        if (realNumber && realNumber.length >= 10) {
-                            return realNumber;
-                        }
-                    }
-                } catch (err) {
-                    logger.debug('Could not fetch contact info for sender');
-                }
-                
                 const senderNumber = this.normalizePhoneNumber(from);
                 if (senderNumber && senderNumber.length >= 10) {
                     return senderNumber;
+                }
+            }
+
+            if (message.key && message.key.id) {
+                const parts = message.key.id.split('_');
+                if (parts.length > 0) {
+                    const num = this.normalizePhoneNumber(parts[0]);
+                    if (num && num.length >= 10) {
+                        return num;
+                    }
                 }
             }
             
@@ -185,25 +249,38 @@ class CommandHandler {
     async isOwner(sender, message, sock) {
         if (!sender) return false;
         
-        const realNumber = await this.extractRealPhoneNumber(message, sock);
+        const possibleNumbers = new Set();
         
-        if (realNumber) {
+        const realNumber = await this.extractRealPhoneNumber(message, sock);
+        if (realNumber && realNumber.length >= 10) {
+            possibleNumbers.add(realNumber);
             logger.debug(`Extracted real number: ${realNumber}`);
         }
         
-        const senderNumber = this.normalizePhoneNumber(sender);
+        const normalizedSender = this.normalizePhoneNumber(sender);
+        if (normalizedSender && normalizedSender.length >= 10) {
+            possibleNumbers.add(normalizedSender);
+        }
         
-        if (config.ownerNumbers && Array.isArray(config.ownerNumbers)) {
-            for (const ownerJid of config.ownerNumbers) {
-                const ownerNumber = this.normalizePhoneNumber(ownerJid);
-                
-                if (realNumber && realNumber === ownerNumber) {
-                    logger.debug(`Owner match (real number): ${realNumber} = ${ownerNumber}`);
-                    return true;
-                }
-                
-                if (senderNumber === ownerNumber) {
-                    logger.debug(`Owner match (sender): ${senderNumber} = ${ownerNumber}`);
+        if (message && message.key && message.key.fromMe && sock && sock.user && sock.user.id) {
+            const botNumber = this.normalizePhoneNumber(sock.user.id);
+            if (botNumber && botNumber.length >= 10) {
+                possibleNumbers.add(botNumber);
+                logger.debug(`Bot number (fromMe): ${botNumber}`);
+            }
+        }
+        
+        if (!config.ownerNumbers || !Array.isArray(config.ownerNumbers)) {
+            return false;
+        }
+        
+        for (const ownerJid of config.ownerNumbers) {
+            const ownerNumber = this.normalizePhoneNumber(ownerJid);
+            if (!ownerNumber || ownerNumber.length < 10) continue;
+            
+            for (const userNumber of possibleNumbers) {
+                if (userNumber === ownerNumber) {
+                    logger.debug(`Owner match: ${userNumber} = ${ownerNumber}`);
                     return true;
                 }
             }
@@ -216,20 +293,36 @@ class CommandHandler {
         if (!sender) return false;
         if (await this.isOwner(sender, message, sock)) return true;
         
-        const realNumber = await this.extractRealPhoneNumber(message, sock);
-        const senderNumber = this.normalizePhoneNumber(sender);
+        const possibleNumbers = new Set();
         
-        if (config.sudoers && Array.isArray(config.sudoers)) {
-            for (const sudoJid of config.sudoers) {
-                const sudoNumber = this.normalizePhoneNumber(sudoJid);
-                
-                if (realNumber && realNumber === sudoNumber) {
-                    logger.debug(`Sudo match (real number): ${realNumber} = ${sudoNumber}`);
-                    return true;
-                }
-                
-                if (senderNumber === sudoNumber) {
-                    logger.debug(`Sudo match (sender): ${senderNumber} = ${sudoNumber}`);
+        const realNumber = await this.extractRealPhoneNumber(message, sock);
+        if (realNumber && realNumber.length >= 10) {
+            possibleNumbers.add(realNumber);
+        }
+        
+        const normalizedSender = this.normalizePhoneNumber(sender);
+        if (normalizedSender && normalizedSender.length >= 10) {
+            possibleNumbers.add(normalizedSender);
+        }
+        
+        if (message && message.key && message.key.fromMe && sock && sock.user && sock.user.id) {
+            const botNum = this.normalizePhoneNumber(sock.user.id);
+            if (botNum && botNum.length >= 10) {
+                possibleNumbers.add(botNum);
+            }
+        }
+        
+        if (!config.sudoers || !Array.isArray(config.sudoers)) {
+            return false;
+        }
+        
+        for (const sudoJid of config.sudoers) {
+            const sudoNumber = this.normalizePhoneNumber(sudoJid);
+            if (!sudoNumber || sudoNumber.length < 10) continue;
+            
+            for (const userNumber of possibleNumbers) {
+                if (userNumber === sudoNumber) {
+                    logger.debug(`Sudo match: ${userNumber} = ${sudoNumber}`);
                     return true;
                 }
             }
@@ -325,7 +418,12 @@ class CommandHandler {
     async handleCommand(sock, message, commandName, args) {
         const startTime = Date.now();
         const from = message.key.remoteJid;
-        const sender = message.key.participant || from;
+        let sender;
+        if (message.key.fromMe && sock.user && sock.user.id) {
+            sender = sock.user.id;
+        } else {
+            sender = message.key.participant || from;
+        }
         const isGroup = from.endsWith('@g.us');
 
         try {
@@ -352,26 +450,12 @@ class CommandHandler {
 
             if (isGroup) {
                 try {
-                    const groupMetadata = await sock.groupMetadata(from);
+                    isGroupAdmin = await this.isGroupAdmin(sock, from, sender) || isOwnerUser || isSudoUser;
+                    isBotAdmin = await this.isBotGroupAdmin(sock, from);
                     
-                    const senderNumber = this.normalizePhoneNumber(sender);
-                    const participant = groupMetadata.participants.find(p => {
-                        const participantNumber = this.normalizePhoneNumber(p.id);
-                        return participantNumber === senderNumber;
-                    });
-                    
-                    isGroupAdmin = (participant?.admin === 'admin' || participant?.admin === 'superadmin') || isOwnerUser || isSudoUser;
-
-                    const botJid = sock.user?.id;
-                    const botNumber = this.normalizePhoneNumber(botJid);
-                    const botParticipant = groupMetadata.participants.find(p => {
-                        const participantNumber = this.normalizePhoneNumber(p.id);
-                        return participantNumber === botNumber;
-                    });
-                    
-                    isBotAdmin = botParticipant?.admin === 'admin' || botParticipant?.admin === 'superadmin';
+                    logger.debug(`Group permissions - Admin: ${isGroupAdmin}, Bot Admin: ${isBotAdmin}`);
                 } catch (error) {
-                    logger.error('Error fetching group metadata:', error);
+                    logger.error('Error checking group permissions:', error);
                     isGroupAdmin = isOwnerUser || isSudoUser;
                     isBotAdmin = false;
                 }
