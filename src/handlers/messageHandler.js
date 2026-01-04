@@ -84,44 +84,76 @@ class MessageHandler {
 
     normalizePhoneNumber(jid) {
         if (!jid) return '';
-        let cleaned = jid.split('@')[0];
+        let cleaned = jid.replace(/@s\.whatsapp\.net|@c\.us|@g\.us|@broadcast/g, '');
         cleaned = cleaned.split(':')[0];
         cleaned = cleaned.replace(/[^0-9]/g, '');
         return cleaned;
     }
 
-    isOwner(sender) {
-        if (!sender) return false;
+    extractAllPossibleNumbers(message, sock) {
+        const numbers = new Set();
         
-        const senderNumber = this.normalizePhoneNumber(sender);
-        
-        if (config.ownerNumbers && Array.isArray(config.ownerNumbers)) {
-            const isOwnerResult = config.ownerNumbers.some(ownerJid => {
-                const ownerNumber = this.normalizePhoneNumber(ownerJid);
-                return senderNumber === ownerNumber;
-            });
-            
-            if (isOwnerResult) {
-                logger.debug(`Owner verified: ${senderNumber}`);
+        try {
+            if (message.key.participant) {
+                numbers.add(this.normalizePhoneNumber(message.key.participant));
             }
             
-            return isOwnerResult;
+            if (message.key.remoteJid && !message.key.remoteJid.endsWith('@g.us')) {
+                numbers.add(this.normalizePhoneNumber(message.key.remoteJid));
+            }
+            
+            if (message.key.fromMe && sock.user && sock.user.id) {
+                numbers.add(this.normalizePhoneNumber(sock.user.id));
+            }
+            
+            if (message.participant) {
+                numbers.add(this.normalizePhoneNumber(message.participant));
+            }
+        } catch (error) {
+            logger.error('Error extracting numbers:', error);
+        }
+        
+        return Array.from(numbers).filter(n => n && n.length >= 10);
+    }
+
+    isOwner(sender, message, sock) {
+        if (!sender) return false;
+        
+        const possibleNumbers = message && sock ? this.extractAllPossibleNumbers(message, sock) : [];
+        possibleNumbers.push(this.normalizePhoneNumber(sender));
+        
+        if (config.ownerNumbers && Array.isArray(config.ownerNumbers)) {
+            for (const ownerJid of config.ownerNumbers) {
+                const ownerNumber = this.normalizePhoneNumber(ownerJid);
+                for (const userNumber of possibleNumbers) {
+                    if (userNumber === ownerNumber) {
+                        logger.debug(`Owner match found: ${userNumber} = ${ownerNumber}`);
+                        return true;
+                    }
+                }
+            }
         }
         
         return false;
     }
 
-    isSudo(sender) {
+    isSudo(sender, message, sock) {
         if (!sender) return false;
-        if (this.isOwner(sender)) return true;
+        if (this.isOwner(sender, message, sock)) return true;
         
-        const senderNumber = this.normalizePhoneNumber(sender);
+        const possibleNumbers = message && sock ? this.extractAllPossibleNumbers(message, sock) : [];
+        possibleNumbers.push(this.normalizePhoneNumber(sender));
         
         if (config.sudoers && Array.isArray(config.sudoers)) {
-            return config.sudoers.some(sudoJid => {
+            for (const sudoJid of config.sudoers) {
                 const sudoNumber = this.normalizePhoneNumber(sudoJid);
-                return senderNumber === sudoNumber;
-            });
+                for (const userNumber of possibleNumbers) {
+                    if (userNumber === sudoNumber) {
+                        logger.debug(`Sudo match found: ${userNumber} = ${sudoNumber}`);
+                        return true;
+                    }
+                }
+            }
         }
         
         return false;
@@ -154,9 +186,10 @@ class MessageHandler {
 
             const text = messageContent.text;
             const autoDownloadHandled = await handleAutoDownload(sock, message, from, sender, text);
-if (autoDownloadHandled) {
-    return;
- }
+            if (autoDownloadHandled) {
+                return;
+            }
+            
             const quotedMsg = message.message?.extendedTextMessage?.contextInfo;
             
             if (quotedMsg && quotedMsg.stanzaId) {
@@ -178,10 +211,11 @@ if (autoDownloadHandled) {
                 return;
             }
 
-            const isOwnerUser = this.isOwner(sender);
-            const isSudoUser = this.isSudo(sender);
-
-            logger.info(`MESSAGE | From: ${sender.split('@')[0]} | ${isGroup ? 'GROUP' : 'PRIVATE'} | Owner: ${isOwnerUser} | Sudo: ${isSudoUser} | Text: "${text.substring(0, 50)}${text.length > 50 ? '...' : ''}"`);
+            const isOwnerUser = this.isOwner(sender, message, sock);
+            const isSudoUser = this.isSudo(sender, message, sock);
+            
+            const allNumbers = this.extractAllPossibleNumbers(message, sock);
+            logger.info(`MESSAGE | From: ${sender.split('@')[0]} | ${isGroup ? 'GROUP' : 'PRIVATE'} | Owner: ${isOwnerUser} | Sudo: ${isSudoUser} | AllNumbers: [${allNumbers.join(', ')}] | Text: "${text.substring(0, 50)}${text.length > 50 ? '...' : ''}"`);
 
             if (config.whitelist && config.whitelist.enabled) {
                 if (!isOwnerUser && !isSudoUser) {
