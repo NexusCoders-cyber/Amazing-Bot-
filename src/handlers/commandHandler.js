@@ -116,54 +116,135 @@ class CommandHandler {
 
     normalizePhoneNumber(jid) {
         if (!jid) return '';
-        let cleaned = jid.split('@')[0];
+        let cleaned = jid.replace(/@s\.whatsapp\.net|@c\.us|@g\.us|@broadcast/g, '');
         cleaned = cleaned.split(':')[0];
         cleaned = cleaned.replace(/[^0-9]/g, '');
         return cleaned;
     }
 
-    isOwner(sender) {
+    async extractRealPhoneNumber(message, sock) {
+        try {
+            const from = message.key.remoteJid;
+            const isGroup = from.endsWith('@g.us');
+            
+            if (message.key.fromMe && sock.user && sock.user.id) {
+                const botNumber = this.normalizePhoneNumber(sock.user.id);
+                if (botNumber && botNumber.length >= 10) {
+                    return botNumber;
+                }
+            }
+            
+            if (isGroup && message.key.participant) {
+                try {
+                    const participantJid = message.key.participant;
+                    const contactInfo = await sock.onWhatsApp(participantJid);
+                    
+                    if (contactInfo && contactInfo[0] && contactInfo[0].jid) {
+                        const realNumber = this.normalizePhoneNumber(contactInfo[0].jid);
+                        if (realNumber && realNumber.length >= 10) {
+                            return realNumber;
+                        }
+                    }
+                } catch (err) {
+                    logger.debug('Could not fetch contact info for participant');
+                }
+                
+                const participantNumber = this.normalizePhoneNumber(message.key.participant);
+                if (participantNumber && participantNumber.length >= 10) {
+                    return participantNumber;
+                }
+            }
+            
+            if (!isGroup) {
+                try {
+                    const contactInfo = await sock.onWhatsApp(from);
+                    
+                    if (contactInfo && contactInfo[0] && contactInfo[0].jid) {
+                        const realNumber = this.normalizePhoneNumber(contactInfo[0].jid);
+                        if (realNumber && realNumber.length >= 10) {
+                            return realNumber;
+                        }
+                    }
+                } catch (err) {
+                    logger.debug('Could not fetch contact info for sender');
+                }
+                
+                const senderNumber = this.normalizePhoneNumber(from);
+                if (senderNumber && senderNumber.length >= 10) {
+                    return senderNumber;
+                }
+            }
+            
+            return null;
+        } catch (error) {
+            logger.error('Error extracting real phone number:', error);
+            return null;
+        }
+    }
+
+    async isOwner(sender, message, sock) {
         if (!sender) return false;
+        
+        const realNumber = await this.extractRealPhoneNumber(message, sock);
+        
+        if (realNumber) {
+            logger.debug(`Extracted real number: ${realNumber}`);
+        }
         
         const senderNumber = this.normalizePhoneNumber(sender);
         
         if (config.ownerNumbers && Array.isArray(config.ownerNumbers)) {
-            const isOwnerResult = config.ownerNumbers.some(ownerJid => {
+            for (const ownerJid of config.ownerNumbers) {
                 const ownerNumber = this.normalizePhoneNumber(ownerJid);
-                return senderNumber === ownerNumber;
-            });
-            
-            if (isOwnerResult) {
-                logger.debug(`Owner verified: ${senderNumber}`);
+                
+                if (realNumber && realNumber === ownerNumber) {
+                    logger.debug(`Owner match (real number): ${realNumber} = ${ownerNumber}`);
+                    return true;
+                }
+                
+                if (senderNumber === ownerNumber) {
+                    logger.debug(`Owner match (sender): ${senderNumber} = ${ownerNumber}`);
+                    return true;
+                }
             }
-            
-            return isOwnerResult;
         }
         
         return false;
     }
 
-    isSudo(sender) {
+    async isSudo(sender, message, sock) {
         if (!sender) return false;
-        if (this.isOwner(sender)) return true;
+        if (await this.isOwner(sender, message, sock)) return true;
         
+        const realNumber = await this.extractRealPhoneNumber(message, sock);
         const senderNumber = this.normalizePhoneNumber(sender);
         
         if (config.sudoers && Array.isArray(config.sudoers)) {
-            return config.sudoers.some(sudoJid => {
+            for (const sudoJid of config.sudoers) {
                 const sudoNumber = this.normalizePhoneNumber(sudoJid);
-                return senderNumber === sudoNumber;
-            });
+                
+                if (realNumber && realNumber === sudoNumber) {
+                    logger.debug(`Sudo match (real number): ${realNumber} = ${sudoNumber}`);
+                    return true;
+                }
+                
+                if (senderNumber === sudoNumber) {
+                    logger.debug(`Sudo match (sender): ${senderNumber} = ${sudoNumber}`);
+                    return true;
+                }
+            }
         }
         
         return false;
     }
 
-    async checkCooldown(commandName, sender) {
+    async checkCooldown(commandName, sender, message, sock) {
         const command = this.getCommand(commandName);
         if (!command || !command.cooldown) return { onCooldown: false };
 
-        if (this.isOwner(sender) || this.isSudo(sender)) return { onCooldown: false };
+        if (await this.isOwner(sender, message, sock) || await this.isSudo(sender, message, sock)) {
+            return { onCooldown: false };
+        }
 
         const cooldownKey = `${commandName}_${sender}`;
         const now = Date.now();
@@ -187,25 +268,25 @@ class CommandHandler {
         return { onCooldown: false };
     }
 
-    async checkPermissions(command, sock, message, isGroup, isGroupAdmin, isBotAdmin) {
+    async checkPermissions(command, sock, message, isGroup, isGroupAdmin, isBotAdmin, isOwnerUser, isSudoUser) {
         const from = message.key.remoteJid;
-        const sender = message.key.participant || from;
 
-        const isOwnerUser = this.isOwner(sender);
-        const isSudoUser = this.isSudo(sender);
-
-        if (command.ownerOnly && !isOwnerUser && !isSudoUser) {
-            await sock.sendMessage(from, {
-                text: '❌ Access Denied\n\nThis command is only available to the bot owner.'
-            }, { quoted: message });
-            return false;
+        if (command.ownerOnly) {
+            if (!isOwnerUser && !isSudoUser) {
+                await sock.sendMessage(from, {
+                    text: '❌ Access Denied\n\nThis command is only available to the bot owner.'
+                }, { quoted: message });
+                return false;
+            }
         }
 
-        if (command.sudoOnly && !isSudoUser) {
-            await sock.sendMessage(from, {
-                text: '❌ Access Denied\n\nThis command is only available to sudo users.'
-            }, { quoted: message });
-            return false;
+        if (command.sudoOnly) {
+            if (!isSudoUser && !isOwnerUser) {
+                await sock.sendMessage(from, {
+                    text: '❌ Access Denied\n\nThis command is only available to sudo users.'
+                }, { quoted: message });
+                return false;
+            }
         }
 
         if (command.groupOnly && !isGroup) {
@@ -222,11 +303,13 @@ class CommandHandler {
             return false;
         }
 
-        if (isGroup && command.adminOnly && !isGroupAdmin && !isOwnerUser && !isSudoUser) {
-            await sock.sendMessage(from, {
-                text: '❌ Admin Only\n\nThis command requires group admin privileges.'
-            }, { quoted: message });
-            return false;
+        if (isGroup && command.adminOnly) {
+            if (!isGroupAdmin && !isOwnerUser && !isSudoUser) {
+                await sock.sendMessage(from, {
+                    text: '❌ Admin Only\n\nThis command requires group admin privileges.'
+                }, { quoted: message });
+                return false;
+            }
         }
 
         if (isGroup && command.botAdminRequired && !isBotAdmin) {
@@ -253,12 +336,10 @@ class CommandHandler {
                 return false;
             }
 
-            const isOwnerUser = this.isOwner(sender);
-            const isSudoUser = this.isSudo(sender);
+            const isOwnerUser = await this.isOwner(sender, message, sock);
+            const isSudoUser = await this.isSudo(sender, message, sock);
 
-            logger.debug(`Command: ${commandName} | Sender: ${sender} | IsOwner: ${isOwnerUser} | IsSudo: ${isSudoUser}`);
-
-            const cooldownCheck = await this.checkCooldown(commandName, sender);
+            const cooldownCheck = await this.checkCooldown(commandName, sender, message, sock);
             if (cooldownCheck.onCooldown) {
                 await sock.sendMessage(from, {
                     text: `⏰ Cooldown\n\nPlease wait ${cooldownCheck.timeLeft} seconds before using this command again.`
@@ -279,7 +360,7 @@ class CommandHandler {
                         return participantNumber === senderNumber;
                     });
                     
-                    isGroupAdmin = participant?.admin === 'admin' || participant?.admin === 'superadmin' || isOwnerUser || isSudoUser;
+                    isGroupAdmin = (participant?.admin === 'admin' || participant?.admin === 'superadmin') || isOwnerUser || isSudoUser;
 
                     const botJid = sock.user?.id;
                     const botNumber = this.normalizePhoneNumber(botJid);
@@ -289,8 +370,6 @@ class CommandHandler {
                     });
                     
                     isBotAdmin = botParticipant?.admin === 'admin' || botParticipant?.admin === 'superadmin';
-
-                    logger.debug(`Group: ${from} | IsGroupAdmin: ${isGroupAdmin} | IsBotAdmin: ${isBotAdmin}`);
                 } catch (error) {
                     logger.error('Error fetching group metadata:', error);
                     isGroupAdmin = isOwnerUser || isSudoUser;
@@ -299,7 +378,7 @@ class CommandHandler {
             }
 
             const hasPermission = await this.checkPermissions(
-                command, sock, message, isGroup, isGroupAdmin, isBotAdmin
+                command, sock, message, isGroup, isGroupAdmin, isBotAdmin, isOwnerUser, isSudoUser
             );
 
             if (!hasPermission) {
