@@ -3,6 +3,7 @@ import 'dotenv/config';
 function normalizePhoneNumber(phone) {
     if (!phone || phone.trim() === '') return null;
     let cleaned = phone.trim();
+    cleaned = cleaned.replace(/@s\.whatsapp\.net|@c\.us|@g\.us|@broadcast/g, '');
     cleaned = cleaned.split(':')[0];
     cleaned = cleaned.replace(/[^0-9]/g, '');
     if (cleaned.length < 10) return null;
@@ -262,11 +263,17 @@ function validateConfig() {
     if (!config.ownerNumbers || config.ownerNumbers.length === 0) {
         console.warn('⚠️  OWNER_NUMBERS is not set in .env file');
     } else {
-        console.log(`✅ Loaded ${config.ownerNumbers.length} owner number(s): ${config.ownerNumbers.map(n => n.split('@')[0]).join(', ')}`);
+        console.log(`✅ Loaded ${config.ownerNumbers.length} owner number(s)`);
+        config.ownerNumbers.forEach((num, idx) => {
+            console.log(`   Owner ${idx + 1}: ${num.split('@')[0]}`);
+        });
     }
     
     if (config.sudoers && config.sudoers.length > 0) {
-        console.log(`✅ Loaded ${config.sudoers.length} sudo user(s): ${config.sudoers.map(n => n.split('@')[0]).join(', ')}`);
+        console.log(`✅ Loaded ${config.sudoers.length} sudo user(s)`);
+        config.sudoers.forEach((num, idx) => {
+            console.log(`   Sudo ${idx + 1}: ${num.split('@')[0]}`);
+        });
     }
     
     if (config.database.url === 'mongodb://localhost:27017/ilombot') {
