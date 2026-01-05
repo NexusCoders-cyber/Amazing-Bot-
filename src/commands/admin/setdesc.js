@@ -1,4 +1,4 @@
-export default {
+export const setdesc = {
     name: 'setdesc',
     aliases: ['changedesc', 'groupdesc'],
     category: 'admin',
@@ -19,19 +19,19 @@ export default {
             
             if (newDesc.length > 512) {
                 return await sock.sendMessage(from, {
-                    text: '❌ Description too long (max 512 characters)'
+                    text: 'Error: Description too long (max 512 characters)'
                 }, { quoted: message });
             }
 
             await sock.groupUpdateDescription(from, newDesc);
 
             await sock.sendMessage(from, {
-                text: '✅ Group description updated'
+                text: 'Group description updated successfully'
             }, { quoted: message });
 
         } catch (error) {
             await sock.sendMessage(from, {
-                text: `❌ Failed to change description\n\n${error.message}`
+                text: `Error: Failed to change description\n${error.message}`
             }, { quoted: message });
         }
     }
