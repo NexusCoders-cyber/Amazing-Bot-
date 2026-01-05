@@ -1,4 +1,4 @@
-export default {
+export const promote = {
     name: 'promote',
     aliases: ['admin', 'makeadmin'],
     category: 'admin',
@@ -22,34 +22,31 @@ export default {
             
             if (!targetUser) {
                 return await sock.sendMessage(from, {
-                    text: '❌ Mention or reply to a user to promote'
+                    text: 'Error: Mention or reply to a user to promote'
                 }, { quoted: message });
             }
 
             const groupMetadata = await sock.groupMetadata(from);
-            const normalizeJid = (jid) => jid.split('@')[0].split(':')[0];
-            
-            const targetNormalized = normalizeJid(targetUser);
-            const participant = groupMetadata.participants.find(p => {
-                return normalizeJid(p.id) === targetNormalized;
-            });
+            const participant = groupMetadata.participants.find(p => 
+                p.id.split('@')[0].split(':')[0] === targetUser.split('@')[0].split(':')[0]
+            );
 
             if (participant?.admin) {
                 return await sock.sendMessage(from, {
-                    text: '❌ User is already an admin'
+                    text: 'Error: User is already an admin'
                 }, { quoted: message });
             }
 
             await sock.groupParticipantsUpdate(from, [targetUser], 'promote');
 
             await sock.sendMessage(from, {
-                text: `✅ User promoted to admin\n@${targetUser.split('@')[0]}`,
+                text: `Successfully promoted user to admin\n@${targetUser.split('@')[0]}`,
                 mentions: [targetUser]
             }, { quoted: message });
 
         } catch (error) {
             await sock.sendMessage(from, {
-                text: `❌ Failed to promote user\n\n${error.message}`
+                text: `Error: Failed to promote user\n${error.message}`
             }, { quoted: message });
         }
     }
