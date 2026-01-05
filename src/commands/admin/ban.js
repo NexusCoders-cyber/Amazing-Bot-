@@ -1,6 +1,5 @@
 import config from '../../config.js';
 import { updateUser } from '../../models/User.js';
-import formatResponse from '../../utils/formatUtils.js';
 
 export default {
     name: 'ban',
@@ -17,15 +16,13 @@ export default {
     async execute({ sock, message, args, from, sender, isGroup, isGroupAdmin }) {
         if (!isGroup) {
             return sock.sendMessage(from, {
-                text: formatResponse.error('GROUP ONLY',
-                    'This command can only be used in groups')
+                text: 'Error: This command can only be used in groups'
             }, { quoted: message });
         }
 
         if (!isGroupAdmin) {
             return sock.sendMessage(from, {
-                text: formatResponse.error('ADMIN ONLY',
-                    'You need to be a group admin to use this command')
+                text: 'Error: You need to be a group admin to use this command'
             }, { quoted: message });
         }
 
@@ -52,54 +49,43 @@ export default {
 
             if (!targetJid) {
                 return sock.sendMessage(from, {
-                    text: formatResponse.error('NO TARGET',
-                        'Reply to a message or mention a user to ban',
-                        'Usage: ban @user [reason] OR reply to message')
+                    text: 'Error: Reply to a message or mention a user to ban\n\nUsage: ban @user [reason] OR reply to message'
                 }, { quoted: message });
             }
 
             if (config.ownerNumbers.some(owner => targetJid.includes(owner.split('@')[0]))) {
                 return sock.sendMessage(from, {
-                    text: formatResponse.error('CANNOT BAN OWNER',
-                        'Cannot ban the bot owner!')
+                    text: 'Error: Cannot ban the bot owner'
                 }, { quoted: message });
             }
 
             if (targetJid === sender) {
                 return sock.sendMessage(from, {
-                    text: formatResponse.error('INVALID ACTION',
-                        'You cannot ban yourself!')
+                    text: 'Error: You cannot ban yourself'
                 }, { quoted: message });
             }
 
-            await updateUser(targetJid, {
-                isBanned: true,
-                banReason: reason,
-                bannedAt: new Date(),
-                bannedBy: sender
-            });
+            try {
+                await updateUser(targetJid, {
+                    isBanned: true,
+                    banReason: reason,
+                    bannedAt: new Date(),
+                    bannedBy: sender
+                });
+            } catch (error) {
+                console.error('Database error:', error);
+            }
 
             const targetNumber = targetJid.split('@')[0];
             await sock.sendMessage(from, {
-                text: `╭──⦿【 🚫 USER BANNED 】
-│
-│ 👤 𝗨𝘀𝗲𝗿: @${targetNumber}
-│ 📝 𝗥𝗲𝗮𝘀𝗼𝗻: ${reason}
-│ 👮 𝗕𝗮𝗻𝗻𝗲𝗱 𝗯𝘆: @${sender.split('@')[0]}
-│ 📅 𝗗𝗮𝘁𝗲: ${new Date().toLocaleDateString()}
-│
-│ ⚠️ User can no longer use bot commands
-│
-╰────────────⦿`,
+                text: `User Banned\n\nUser: @${targetNumber}\nReason: ${reason}\nBanned by: @${sender.split('@')[0]}\nDate: ${new Date().toLocaleDateString()}\n\nUser can no longer use bot commands`,
                 mentions: [targetJid, sender]
             }, { quoted: message });
 
         } catch (error) {
             console.error('Ban command error:', error);
             await sock.sendMessage(from, {
-                text: formatResponse.error('BAN FAILED',
-                    'Failed to ban user',
-                    error.message)
+                text: `Error: Failed to ban user\n${error.message}`
             }, { quoted: message });
         }
     }
