@@ -1,4 +1,4 @@
-export const unmute = {
+export default {
     name: 'unmute',
     aliases: ['open', 'unlockgroup'],
     category: 'admin',
