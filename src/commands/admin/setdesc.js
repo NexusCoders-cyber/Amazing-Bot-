@@ -1,4 +1,4 @@
-export const setdesc = {
+export default {
     name: 'setdesc',
     aliases: ['changedesc', 'groupdesc'],
     category: 'admin',
