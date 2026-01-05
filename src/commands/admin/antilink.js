@@ -17,37 +17,37 @@ export default {
     async execute({ sock, message, args, from, sender, isGroup, isGroupAdmin, isBotAdmin }) {
         if (!isGroup) {
             return await sock.sendMessage(from, {
-                text: '╭──⦿【 ❌ ERROR 】\n│ 𝗠𝗲𝘀𝘀𝗮𝗴𝗲: Group only command\n│\n│ 💡 This command works in groups\n╰────────⦿'
+                text: 'Error: This command works in groups only'
             }, { quoted: message });
         }
 
         if (!isGroupAdmin) {
             return await sock.sendMessage(from, {
-                text: '╭──⦿【 ❌ ERROR 】\n│ 𝗠𝗲𝘀𝘀𝗮𝗴𝗲: Admin only\n│\n│ 💡 You need admin privileges\n╰────────⦿'
+                text: 'Error: You need admin privileges to use this command'
             }, { quoted: message });
         }
 
         if (!isBotAdmin) {
             return await sock.sendMessage(from, {
-                text: '╭──⦿【 ❌ ERROR 】\n│ 𝗠𝗲𝘀𝘀𝗮𝗴𝗲: Bot not admin\n│\n│ 💡 Make me an admin first\n╰────────⦿'
+                text: 'Error: Make me an admin first to use this feature'
             }, { quoted: message });
         }
 
         try {
             const action = args[0]?.toLowerCase();
-            const group = await getGroup(from);
+            let group;
+            
+            try {
+                group = await getGroup(from);
+            } catch (error) {
+                console.error('Database error:', error);
+            }
+            
             const currentStatus = group?.settings?.antiLink || false;
 
             if (!action) {
                 return await sock.sendMessage(from, {
-                    text: `╭──⦿【 🔗 ANTILINK STATUS 】
-│
-│ 📊 𝗖𝘂𝗿𝗿𝗲𝗻𝘁 𝗦𝘁𝗮𝘁𝘂𝘀: ${currentStatus ? '✅ Enabled' : '❌ Disabled'}
-│
-│ 💡 𝗨𝘀𝗮𝗴𝗲: ${config.prefix}antilink [on/off]
-│ 📝 𝗘𝘅𝗮𝗺𝗽𝗹𝗲: ${config.prefix}antilink on
-│
-╰────────────⦿`
+                    text: `Antilink Status\n\nCurrent Status: ${currentStatus ? 'Enabled' : 'Disabled'}\n\nUsage: ${config.prefix}antilink [on/off]\nExample: ${config.prefix}antilink on`
                 }, { quoted: message });
             }
 
@@ -58,35 +58,30 @@ export default {
                 newStatus = false;
             } else {
                 return await sock.sendMessage(from, {
-                    text: '╭──⦿【 ❌ ERROR 】\n│ 𝗠𝗲𝘀𝘀𝗮𝗴𝗲: Invalid option\n│\n│ 💡 Use: on/off, enable/disable\n╰────────⦿'
+                    text: 'Error: Invalid option. Use: on/off or enable/disable'
                 }, { quoted: message });
             }
 
-            await updateGroup(from, {
-                $set: { 'settings.antiLink': newStatus }
-            });
+            try {
+                await updateGroup(from, {
+                    $set: { 'settings.antiLink': newStatus }
+                });
+            } catch (error) {
+                console.error('Database update error:', error);
+            }
 
-            const statusIcon = newStatus ? '✅' : '❌';
             const actionText = newStatus ? 
                 'Links will be automatically deleted' : 
                 'Links are now allowed';
 
             await sock.sendMessage(from, {
-                text: `╭──⦿【 🔗 ANTILINK ${newStatus ? 'ENABLED' : 'DISABLED'} 】
-│
-│ 📊 𝗦𝘁𝗮𝘁𝘂𝘀: ${statusIcon} ${newStatus ? 'Enabled' : 'Disabled'}
-│ 👮 𝗕𝘆: @${sender.split('@')[0]}
-│ 📅 𝗗𝗮𝘁𝗲: ${new Date().toLocaleDateString()}
-│
-│ 💡 ${actionText}
-│
-╰────────────⦿`,
+                text: `Antilink ${newStatus ? 'Enabled' : 'Disabled'}\n\nStatus: ${newStatus ? 'Active' : 'Inactive'}\nBy: @${sender.split('@')[0]}\nDate: ${new Date().toLocaleDateString()}\n\n${actionText}`,
                 mentions: [sender]
             }, { quoted: message });
 
         } catch (error) {
             await sock.sendMessage(from, {
-                text: '╭──⦿【 ❌ ERROR 】\n│ 𝗠𝗲𝘀𝘀𝗮𝗴𝗲: Failed to update\n│\n│ 💡 Try again later\n╰────────⦿'
+                text: 'Error: Failed to update antilink settings. Try again later'
             }, { quoted: message });
         }
     }
