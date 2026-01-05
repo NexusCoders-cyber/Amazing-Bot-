@@ -1,4 +1,4 @@
-export default {
+export const unmute = {
     name: 'unmute',
     aliases: ['open', 'unlockgroup'],
     category: 'admin',
@@ -17,19 +17,19 @@ export default {
             
             if (!groupMetadata.announce) {
                 return await sock.sendMessage(from, {
-                    text: '❌ Group is already open'
+                    text: 'Error: Group is already open'
                 }, { quoted: message });
             }
 
             await sock.groupSettingUpdate(from, 'not_announcement');
 
             await sock.sendMessage(from, {
-                text: '🔓 Group unmuted\n\nAll members can send messages now'
+                text: 'Group unmuted successfully\n\nAll members can send messages now'
             }, { quoted: message });
 
         } catch (error) {
             await sock.sendMessage(from, {
-                text: `❌ Failed to unmute group\n\n${error.message}`
+                text: `Error: Failed to unmute group\n${error.message}`
             }, { quoted: message });
         }
     }
