@@ -1,4 +1,4 @@
-export const mute = {
+export default {
     name: 'mute',
     aliases: ['close', 'lockgroup'],
     category: 'admin',
