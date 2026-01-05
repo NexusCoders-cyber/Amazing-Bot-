@@ -1,4 +1,4 @@
-export const kick = {
+export default {
     name: 'kick',
     aliases: ['remove'],
     category: 'admin',
