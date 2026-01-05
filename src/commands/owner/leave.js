@@ -1,4 +1,4 @@
-export const leave = {
+export default {
     name: 'leave',
     aliases: ['exit', 'leavegroup', 'quit'],
     category: 'owner',
