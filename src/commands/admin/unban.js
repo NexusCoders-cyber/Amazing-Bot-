@@ -1,6 +1,6 @@
 import { updateUser } from '../../models/User.js';
 
-export const unban = {
+export default {
     name: 'unban',
     aliases: ['unblock', 'unbanuser'],
     category: 'admin',
