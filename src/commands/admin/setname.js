@@ -1,4 +1,4 @@
-export const setname = {
+export default {
     name: 'setname',
     aliases: ['changename', 'groupname'],
     category: 'admin',
