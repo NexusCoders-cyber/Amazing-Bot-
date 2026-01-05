@@ -1,4 +1,4 @@
-export const hidetag = {
+export default {
     name: 'hidetag',
     aliases: ['htag', 'announce'],
     category: 'admin',
