@@ -1,4 +1,4 @@
-export default {
+export const groupinfo = {
     name: 'groupinfo',
     aliases: ['groupdetails', 'ginfo', 'group'],
     category: 'admin',
@@ -34,19 +34,19 @@ export default {
             const ownerNumber = owner ? owner.split('@')[0] : 'Unknown';
             const groupId = id.split('@')[0];
 
-            let groupInfo = `📋 GROUP INFO\n\nName: ${subject}\nGroup ID: ${groupId}\nOwner: @${ownerNumber}\nCreated: ${creationDate}\nTime: ${creationTime}\n\n📊 STATISTICS\n\nTotal Members: ${totalMembers}\nSuper Admins: ${superAdmins.length}\nAdmins: ${regularAdmins.length}\nMembers: ${regularMembers}\n`;
+            let groupInfo = `Group Information\n\nName: ${subject}\nGroup ID: ${groupId}\nOwner: @${ownerNumber}\nCreated: ${creationDate} at ${creationTime}\n\nStatistics:\nTotal Members: ${totalMembers}\nSuper Admins: ${superAdmins.length}\nAdmins: ${regularAdmins.length}\nMembers: ${regularMembers}\n`;
 
             if (desc && desc.trim()) {
                 const description = desc.length > 200 ? desc.substring(0, 200) + '...' : desc;
-                groupInfo += `\n📄 DESCRIPTION\n\n${description}\n`;
+                groupInfo += `\nDescription:\n${description}\n`;
             }
 
             if (admins.length > 0) {
-                groupInfo += `\n👑 ADMINS LIST\n\n`;
+                groupInfo += `\nAdmins List:\n`;
                 admins.forEach((admin, index) => {
                     const number = admin.id.split('@')[0];
-                    const role = admin.admin === 'superadmin' ? '👑 Super Admin' : '👮 Admin';
-                    groupInfo += `${index + 1}. ${role}\n   @${number}\n`;
+                    const role = admin.admin === 'superadmin' ? 'Super Admin' : 'Admin';
+                    groupInfo += `${index + 1}. ${role} - @${number}\n`;
                 });
             }
 
@@ -67,7 +67,7 @@ export default {
 
         } catch (error) {
             await sock.sendMessage(from, {
-                text: `❌ Failed to fetch group info\n\n${error.message}`
+                text: `Error: Failed to fetch group info\n${error.message}`
             }, { quoted: message });
         }
     }
