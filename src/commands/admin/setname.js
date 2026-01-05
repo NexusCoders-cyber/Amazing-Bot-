@@ -1,4 +1,4 @@
-export default {
+export const setname = {
     name: 'setname',
     aliases: ['changename', 'groupname'],
     category: 'admin',
@@ -19,19 +19,19 @@ export default {
             
             if (newName.length > 100) {
                 return await sock.sendMessage(from, {
-                    text: '❌ Group name too long (max 100 characters)'
+                    text: 'Error: Group name too long (max 100 characters)'
                 }, { quoted: message });
             }
 
             await sock.groupUpdateSubject(from, newName);
 
             await sock.sendMessage(from, {
-                text: `✅ Group name changed to:\n${newName}`
+                text: `Group name changed successfully to:\n${newName}`
             }, { quoted: message });
 
         } catch (error) {
             await sock.sendMessage(from, {
-                text: `❌ Failed to change group name\n\n${error.message}`
+                text: `Error: Failed to change group name\n${error.message}`
             }, { quoted: message });
         }
     }
