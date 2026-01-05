@@ -1,4 +1,4 @@
-export default {
+export const hidetag = {
     name: 'hidetag',
     aliases: ['htag', 'announce'],
     category: 'admin',
@@ -13,13 +13,13 @@ export default {
     async execute({ sock, message, args, from, sender, isGroup, isGroupAdmin }) {
         if (!isGroup) {
             return await sock.sendMessage(from, {
-                text: '╭──⦿【 ❌ ERROR 】\n│ 𝗠𝗲𝘀𝘀𝗮𝗴𝗲: Group only command\n│\n│ 💡 This command works in groups\n╰────────⦿'
+                text: 'Error: This command works in groups only'
             }, { quoted: message });
         }
 
         if (!isGroupAdmin) {
             return await sock.sendMessage(from, {
-                text: '╭──⦿【 ❌ ERROR 】\n│ 𝗠𝗲𝘀𝘀𝗮𝗴𝗲: Admin only\n│\n│ 💡 You need admin privileges\n╰────────⦿'
+                text: 'Error: You need admin privileges'
             }, { quoted: message });
         }
 
@@ -36,22 +36,14 @@ export default {
 
             if (!text) {
                 return await sock.sendMessage(from, {
-                    text: '╭──⦿【 ❌ ERROR 】\n│ 𝗠𝗲𝘀𝘀𝗮𝗴𝗲: No message provided\n│\n│ 💡 Provide text or reply\n╰────────⦿'
+                    text: 'Error: No message provided. Provide text or reply to a message'
                 }, { quoted: message });
             }
 
             const groupMetadata = await sock.groupMetadata(from);
             const participants = groupMetadata.participants.map(p => p.id);
 
-            const hiddenTagMessage = `╭──⦿【 📢 ANNOUNCEMENT 】
-│
-│ ${text}
-│
-│ 📣 Hidden tag notification
-│ 📅 ${new Date().toLocaleDateString()}
-│ ⏰ ${new Date().toLocaleTimeString()}
-│
-╰────────────⦿`;
+            const hiddenTagMessage = `Announcement\n\n${text}\n\nHidden tag notification\nDate: ${new Date().toLocaleDateString()}\nTime: ${new Date().toLocaleTimeString()}`;
 
             await sock.sendMessage(from, {
                 text: hiddenTagMessage,
@@ -60,7 +52,7 @@ export default {
 
         } catch (error) {
             await sock.sendMessage(from, {
-                text: '╭──⦿【 ❌ ERROR 】\n│ 𝗠𝗲𝘀𝘀𝗮𝗴𝗲: Hidetag failed\n│\n│ 💡 Try again later\n╰────────⦿'
+                text: 'Error: Hidetag failed. Try again later'
             }, { quoted: message });
         }
     }
