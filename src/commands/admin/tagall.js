@@ -1,6 +1,4 @@
-import formatResponse from '../../utils/formatUtils.js';
-
-export default {
+export const tagall = {
     name: 'tagall',
     aliases: ['mentionall', 'everyone'],
     category: 'admin',
@@ -14,15 +12,13 @@ export default {
     async execute({ sock, message, args, from, isGroup, isGroupAdmin }) {
         if (!isGroup) {
             return await sock.sendMessage(from, {
-                text: formatResponse.error('GROUP ONLY',
-                    'This command can only be used in groups')
+                text: 'Error: This command can only be used in groups'
             }, { quoted: message });
         }
 
         if (!isGroupAdmin) {
             return await sock.sendMessage(from, {
-                text: formatResponse.error('ADMIN ONLY',
-                    'You need to be a group admin to use this command')
+                text: 'Error: You need to be a group admin to use this command'
             }, { quoted: message });
         }
 
@@ -40,24 +36,14 @@ export default {
             const groupMetadata = await sock.groupMetadata(from);
             const participants = groupMetadata.participants.map(p => p.id);
 
-            let tagMessage = `╭──⦿【 📢 GROUP ANNOUNCEMENT 】
-│
-│ ${text}
-│
-│ 👥 𝗧𝗮𝗴𝗴𝗲𝗱 𝗠𝗲𝗺𝗯𝗲𝗿𝘀:
-│`;
+            let tagMessage = `Group Announcement\n\n${text}\n\nTagged Members:\n`;
             
             participants.forEach((participant, index) => {
                 const number = participant.split('@')[0];
-                tagMessage += `\n│ ${index + 1}. @${number}`;
+                tagMessage += `${index + 1}. @${number}\n`;
             });
 
-            tagMessage += `\n│
-│ 📊 𝗧𝗼𝘁𝗮𝗹 𝗠𝗲𝗺𝗯𝗲𝗿𝘀: ${participants.length}
-│ 📅 𝗗𝗮𝘁𝗲: ${new Date().toLocaleDateString()}
-│ ⏰ 𝗧𝗶𝗺𝗲: ${new Date().toLocaleTimeString()}
-│
-╰────────────⦿`;
+            tagMessage += `\nTotal Members: ${participants.length}\nDate: ${new Date().toLocaleDateString()}\nTime: ${new Date().toLocaleTimeString()}`;
 
             await sock.sendMessage(from, {
                 text: tagMessage,
@@ -66,9 +52,7 @@ export default {
 
         } catch (error) {
             await sock.sendMessage(from, {
-                text: formatResponse.error('TAGALL FAILED',
-                    'Failed to tag all members',
-                    'Try again or contact admin')
+                text: 'Error: Failed to tag all members. Try again or contact admin'
             }, { quoted: message });
         }
     }
