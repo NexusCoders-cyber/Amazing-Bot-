@@ -1,4 +1,4 @@
-export const unwarn = {
+export default {
     name: 'unwarn',
     aliases: ['removewarn', 'clearwarn'],
     category: 'admin',
