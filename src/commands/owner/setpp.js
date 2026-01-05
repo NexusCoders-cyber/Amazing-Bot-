@@ -1,72 +1,63 @@
-export const setpp = {
-    name: 'setpp',
-    aliases: ['setprofilepic', 'changepfp', 'updatepfp'],
+export const setstatus = {
+    name: 'setstatus',
+    aliases: ['setbio', 'changestatus', 'updatebio'],
     category: 'owner',
-    description: 'Set bot profile picture (Owner Only)',
-    usage: 'setpp [reply to image]',
+    description: 'Set bot WhatsApp status/bio (Owner Only)',
+    usage: 'setstatus <text>',
     cooldown: 30,
     permissions: ['owner'],
     ownerOnly: true,
+    args: true,
+    minArgs: 1,
 
     async execute({ sock, message, args, from, sender }) {
         try {
-            let imageMessage = null;
+            const newStatus = args.join(' ');
             
-            if (message.message?.extendedTextMessage?.contextInfo?.quotedMessage?.imageMessage) {
-                imageMessage = message.message.extendedTextMessage.contextInfo.quotedMessage.imageMessage;
-            } else if (message.message?.imageMessage) {
-                imageMessage = message.message.imageMessage;
-            } else {
+            if (newStatus.length > 139) {
                 return sock.sendMessage(from, {
-                    text: 'Bot Profile Picture Manager\n\nHow to use:\n1. Send an image or reply to one\n2. Use: setpp\n3. Bot profile picture will be updated\n\nRequirements:\n• Image format: JPG, PNG, WEBP\n• Resolution: Min 640x640px (square preferred)\n• File size: Max 5MB\n• Content: Appropriate for profile use\n\nTips:\n• Square images work best\n• High resolution for better quality\n• Avoid text-heavy images\n• Use clear, recognizable imagery\n\nNote: This will change the bot\'s profile picture for all users'
+                    text: `Error: Status Too Long\n\nWhatsApp status must be 139 characters or less\n\nCurrent length: ${newStatus.length} characters\nMaximum allowed: 139 characters\nExceeds by: ${newStatus.length - 139} characters\n\nPlease shorten your status and try again`
+                });
+            }
+            
+            if (newStatus.length < 1) {
+                return sock.sendMessage(from, {
+                    text: 'Error: Status Too Short\n\nStatus cannot be empty\n\nExamples:\n• "WhatsApp Bot - Always Online"\n• "Serving users 24/7"\n• "Your friendly AI assistant"\n• "Games, Media, Utilities & More!"'
                 });
             }
             
             await sock.sendMessage(from, {
-                text: `Updating Bot Profile Picture\n\nAction by: Owner (${sender.split('@')[0]})\nImage source: ${imageMessage.caption ? 'Captioned image' : 'Direct image'}\nStarted: ${new Date().toLocaleString()}\n\nDownloading and processing image...`
+                text: `Updating Bot Status\n\nAction by: Owner (${sender.split('@')[0]})\nNew status: "${newStatus}"\nLength: ${newStatus.length}/139 characters\nStarted: ${new Date().toLocaleString()}\n\nApplying status update...`
             });
             
             try {
-                const imageBuffer = await sock.downloadMediaMessage(imageMessage);
+                await sock.updateProfileStatus(newStatus);
                 
-                if (!imageBuffer) {
-                    throw new Error('Failed to download image');
-                }
-                
-                await sock.sendMessage(from, {
-                    text: `Processing Image\n\nFile size: ${this.formatFileSize(imageBuffer.length)}\nFormat validation: In progress\nResolution check: Analyzing\nContent verification: Processing\n\nPreparing profile picture update...`
-                });
-                
-                await sock.updateProfilePicture(sock.user.id, imageBuffer);
-                
-                const successMessage = `Profile Picture Updated Successfully\n\nUpdate Complete:\n• New profile picture set\n• Visible to all users immediately\n• High quality maintained\n• WhatsApp servers synchronized\n\nImage Details:\n• File size: ${this.formatFileSize(imageBuffer.length)}\n• Format: Image\n• Processing completed\n\nVisibility:\n• All users will see new profile picture\n• May take a few minutes to propagate\n• Cached versions will update automatically\n\nProfile picture change completed successfully`;
+                const successMessage = `Status Updated Successfully\n\nStatus Change Complete:\n• New status: "${newStatus}"\n• Length: ${newStatus.length} characters\n• Updated: ${new Date().toLocaleString()}\n• Visible to: All contacts\n\nStatus Details:\n• Characters used: ${newStatus.length}/139\n• Words: ${newStatus.split(' ').length}\n• Contains emojis: ${this.containsEmojis(newStatus) ? 'Yes' : 'No'}\n\nVisibility:\n• All users will see the new status\n• Updates immediately in WhatsApp\n• Visible in contact info\n• Shows in status updates\n\nBot status updated successfully and is now live`;
                 
                 await sock.sendMessage(from, { text: successMessage });
                 
-                console.log(`[SETPP] Profile picture updated by ${sender}`);
+                console.log(`[SETSTATUS] Status updated by ${sender}: "${newStatus}"`);
                 
-            } catch (processingError) {
-                console.error('Profile picture processing error:', processingError);
+            } catch (statusError) {
+                console.error('Status update error:', statusError);
                 
                 await sock.sendMessage(from, {
-                    text: `Profile Picture Update Failed\n\nError: ${processingError.message}\n\nPossible causes:\n• Image resolution too low (<640px)\n• File size too large (>5MB)\n• Unsupported image format\n• WhatsApp server restrictions\n• Network connectivity issues\n• Rate limiting by WhatsApp\n\nSolutions:\n• Use square images (1:1 aspect ratio)\n• Compress image if too large\n• Try JPG format for better compatibility\n• Wait a few minutes before retrying\n• Check internet connection\n• Ensure image meets requirements\n\nProfile picture remains unchanged`
+                    text: `Status Update Failed\n\nError: ${statusError.message}\n\nPossible causes:\n• WhatsApp API restrictions\n• Rate limiting (too many updates)\n• Network connectivity issues\n• Special characters not supported\n• Account restrictions\n• Server-side error\n\nSolutions:\n• Wait 5 minutes before retrying\n• Remove special characters\n• Use simpler text\n• Check internet connection\n• Try shorter status\n• Verify account status\n\nStatus remains unchanged`
                 });
             }
             
         } catch (error) {
-            console.error('SetPP command error:', error);
+            console.error('SetStatus command error:', error);
             
             await sock.sendMessage(from, {
-                text: `Critical Profile Picture System Error\n\nSystem Error: ${error.message}\n\nActions needed:\n• Check WhatsApp API connectivity\n• Verify image processing capabilities\n• Review bot profile permissions\n• Monitor for account restrictions`
+                text: `Critical Status System Error\n\nSystem Error: ${error.message}\n\nActions needed:\n• Check WhatsApp API connectivity\n• Verify bot profile permissions\n• Review status update capabilities\n• Monitor for account restrictions\n• Check rate limiting status`
             });
         }
     },
     
-    formatFileSize(bytes) {
-        if (bytes === 0) return '0 B';
-        const k = 1024;
-        const sizes = ['B', 'KB', 'MB', 'GB'];
-        const i = Math.floor(Math.log(bytes) / Math.log(k));
-        return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+    containsEmojis(text) {
+        const emojiRegex = /[\u{1F600}-\u{1F64F}]|[\u{1F300}-\u{1F5FF}]|[\u{1F680}-\u{1F6FF}]|[\u{2600}-\u{26FF}]|[\u{2700}-\u{27BF}]/u;
+        return emojiRegex.test(text);
     }
 };
