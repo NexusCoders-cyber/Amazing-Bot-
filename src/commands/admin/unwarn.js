@@ -1,6 +1,4 @@
-import { userWarnings } from './warn.js';
-
-export default {
+export const unwarn = {
     name: 'unwarn',
     aliases: ['removewarn', 'clearwarn'],
     category: 'admin',
@@ -28,7 +26,7 @@ export default {
                 amount = parseInt(args[1]) || 1;
             } else {
                 return await sock.sendMessage(from, {
-                    text: '❌ Mention or reply to a user'
+                    text: 'Error: Mention or reply to a user'
                 }, { quoted: message });
             }
 
@@ -36,7 +34,7 @@ export default {
             
             if (warnings.length === 0) {
                 return await sock.sendMessage(from, {
-                    text: '❌ User has no warnings'
+                    text: 'Error: User has no warnings'
                 }, { quoted: message });
             }
 
@@ -47,7 +45,7 @@ export default {
                 
                 const targetNumber = targetJid.split('@')[0];
                 await sock.sendMessage(from, {
-                    text: `✅ Warnings Cleared\n\nUser: @${targetNumber}\nRemoved: ${currentWarnings} warnings\nBy: @${sender.split('@')[0]}\nDate: ${new Date().toLocaleDateString()}\n\n✅ Clean record`,
+                    text: `Warnings Cleared\n\nUser: @${targetNumber}\nRemoved: ${currentWarnings} warnings\nBy: @${sender.split('@')[0]}\nDate: ${new Date().toLocaleDateString()}\n\nClean record`,
                     mentions: [targetJid, sender]
                 }, { quoted: message });
             } else {
@@ -57,14 +55,14 @@ export default {
                 const remainingWarnings = updatedWarnings.length;
                 const targetNumber = targetJid.split('@')[0];
                 await sock.sendMessage(from, {
-                    text: `✅ Warnings Removed\n\nUser: @${targetNumber}\nRemoved: ${amount} warnings\nRemaining: ${remainingWarnings}/3\nBy: @${sender.split('@')[0]}\nDate: ${new Date().toLocaleDateString()}`,
+                    text: `Warnings Removed\n\nUser: @${targetNumber}\nRemoved: ${amount} warnings\nRemaining: ${remainingWarnings}/3\nBy: @${sender.split('@')[0]}\nDate: ${new Date().toLocaleDateString()}`,
                     mentions: [targetJid, sender]
                 }, { quoted: message });
             }
 
         } catch (error) {
             await sock.sendMessage(from, {
-                text: `❌ Failed to remove warnings\n\n${error.message}`
+                text: `Error: Failed to remove warnings\n${error.message}`
             }, { quoted: message });
         }
     }
