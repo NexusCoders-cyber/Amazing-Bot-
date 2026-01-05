@@ -1,4 +1,4 @@
-export const demote = {
+export default {
     name: 'demote',
     aliases: ['unadmin', 'removeadmin'],
     category: 'admin',
