@@ -1,4 +1,4 @@
-export const tagall = {
+export default {
     name: 'tagall',
     aliases: ['mentionall', 'everyone'],
     category: 'admin',
