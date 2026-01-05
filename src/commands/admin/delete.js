@@ -1,5 +1,3 @@
-import formatResponse from '../../utils/formatUtils.js';
-
 export default {
     name: 'delete',
     aliases: ['del', 'remove'],
@@ -16,32 +14,26 @@ export default {
     async execute({ sock, message, args, from, sender, isGroup, isGroupAdmin, isBotAdmin }) {
         if (!isGroup) {
             return await sock.sendMessage(from, {
-                text: formatResponse.error('GROUP ONLY',
-                    'This command can only be used in groups')
+                text: 'Error: This command can only be used in groups'
             }, { quoted: message });
         }
 
         if (!isGroupAdmin) {
             return await sock.sendMessage(from, {
-                text: formatResponse.error('ADMIN ONLY',
-                    'You need to be a group admin to use this command')
+                text: 'Error: You need to be a group admin to use this command'
             }, { quoted: message });
         }
 
         if (!isBotAdmin) {
             return await sock.sendMessage(from, {
-                text: formatResponse.error('BOT NOT ADMIN',
-                    'I need admin privileges to delete messages',
-                    'Make me an admin first')
+                text: 'Error: I need admin privileges to delete messages. Make me an admin first'
             }, { quoted: message });
         }
 
         const quotedMessage = message.message?.extendedTextMessage?.contextInfo?.quotedMessage;
         if (!quotedMessage) {
             return await sock.sendMessage(from, {
-                text: formatResponse.error('NO MESSAGE',
-                    'Reply to the message you want to delete',
-                    'Usage: Reply to message and type: delete')
+                text: 'Error: Reply to the message you want to delete\n\nUsage: Reply to message and type: delete'
             }, { quoted: message });
         }
 
@@ -59,13 +51,7 @@ export default {
             });
 
             const confirmMsg = await sock.sendMessage(from, {
-                text: `╭──⦿【 ✅ MESSAGE DELETED 】
-│
-│ 🗑️ 𝗔𝗰𝘁𝗶𝗼𝗻: Message removed
-│ 👮 𝗗𝗲𝗹𝗲𝘁𝗲𝗱 𝗯𝘆: @${sender.split('@')[0]}
-│ 📅 𝗗𝗮𝘁𝗲: ${new Date().toLocaleDateString()}
-│
-╰────────────⦿`,
+                text: `Message Deleted\n\nAction: Message removed\nDeleted by: @${sender.split('@')[0]}\nDate: ${new Date().toLocaleDateString()}`,
                 mentions: [sender]
             }, { quoted: message });
 
@@ -83,9 +69,7 @@ export default {
 
         } catch (error) {
             await sock.sendMessage(from, {
-                text: formatResponse.error('DELETE FAILED',
-                    'Failed to delete the message',
-                    'Make sure I have admin permissions and the message is not too old')
+                text: 'Error: Failed to delete the message. Make sure I have admin permissions and the message is not too old'
             }, { quoted: message });
         }
     }
