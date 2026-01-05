@@ -1,4 +1,4 @@
-export const promote = {
+export default {
     name: 'promote',
     aliases: ['admin', 'makeadmin'],
     category: 'admin',
