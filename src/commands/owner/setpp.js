@@ -1,4 +1,4 @@
-export const setstatus = {
+export default {
     name: 'setstatus',
     aliases: ['setbio', 'changestatus', 'updatebio'],
     category: 'owner',
