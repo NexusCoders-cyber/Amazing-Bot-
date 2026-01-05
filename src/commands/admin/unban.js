@@ -1,7 +1,6 @@
 import { updateUser } from '../../models/User.js';
-import formatResponse from '../../utils/formatUtils.js';
 
-export default {
+export const unban = {
     name: 'unban',
     aliases: ['unblock', 'unbanuser'],
     category: 'admin',
@@ -16,15 +15,13 @@ export default {
     async execute({ sock, message, args, from, sender, isGroup, isGroupAdmin }) {
         if (!isGroup) {
             return await sock.sendMessage(from, {
-                text: formatResponse.error('GROUP ONLY',
-                    'This command can only be used in groups')
+                text: 'Error: This command can only be used in groups'
             }, { quoted: message });
         }
 
         if (!isGroupAdmin) {
             return await sock.sendMessage(from, {
-                text: formatResponse.error('ADMIN ONLY',
-                    'You need to be a group admin to use this command')
+                text: 'Error: You need to be a group admin to use this command'
             }, { quoted: message });
         }
 
@@ -46,55 +43,39 @@ export default {
 
             if (!targetJid) {
                 return await sock.sendMessage(from, {
-                    text: formatResponse.error('NO TARGET',
-                        'Reply to a message, mention a user, or provide their number',
-                        'Usage: unban @user OR reply to message')
+                    text: 'Error: Reply to a message, mention a user, or provide their number\n\nUsage: unban @user OR reply to message'
                 }, { quoted: message });
             }
 
-            await updateUser(targetJid, {
-                $set: {
-                    isBanned: false,
-                    banReason: null,
-                    bannedBy: null,
-                    banUntil: null
-                }
-            });
+            try {
+                await updateUser(targetJid, {
+                    $set: {
+                        isBanned: false,
+                        banReason: null,
+                        bannedBy: null,
+                        banUntil: null
+                    }
+                });
+            } catch (error) {
+                console.error('Database error:', error);
+            }
 
             const targetNumber = targetJid.split('@')[0];
             await sock.sendMessage(from, {
-                text: `╭──⦿【 ✅ USER UNBANNED 】
-│
-│ 👤 𝗨𝘀𝗲𝗿: @${targetNumber}
-│ 👮 𝗨𝗻𝗯𝗮𝗻𝗻𝗲𝗱 𝗯𝘆: @${sender.split('@')[0]}
-│ 📅 𝗗𝗮𝘁𝗲: ${new Date().toLocaleDateString()}
-│
-│ ✅ User can now use bot commands again
-│
-╰────────────⦿`,
+                text: `User Unbanned\n\nUser: @${targetNumber}\nUnbanned by: @${sender.split('@')[0]}\nDate: ${new Date().toLocaleDateString()}\n\nUser can now use bot commands again`,
                 mentions: [targetJid, sender]
             }, { quoted: message });
 
             try {
                 await sock.sendMessage(targetJid, {
-                    text: `╭──⦿【 ✅ YOU ARE UNBANNED 】
-│
-│ 👮 𝗨𝗻𝗯𝗮𝗻𝗻𝗲𝗱 𝗯𝘆: @${sender.split('@')[0]}
-│ 📅 𝗗𝗮𝘁𝗲: ${new Date().toLocaleDateString()}
-│
-│ ✅ You can now use bot commands
-│ Please follow the rules
-│
-╰────────────⦿`,
+                    text: `You Are Unbanned\n\nUnbanned by: @${sender.split('@')[0]}\nDate: ${new Date().toLocaleDateString()}\n\nYou can now use bot commands. Please follow the rules`,
                     mentions: [sender]
                 });
             } catch (e) {}
 
         } catch (error) {
             await sock.sendMessage(from, {
-                text: formatResponse.error('UNBAN FAILED',
-                    'Failed to unban user',
-                    error.message)
+                text: `Error: Failed to unban user\n${error.message}`
             }, { quoted: message });
         }
     }
