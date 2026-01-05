@@ -1,4 +1,4 @@
-export default {
+export const demote = {
     name: 'demote',
     aliases: ['unadmin', 'removeadmin'],
     category: 'admin',
@@ -22,40 +22,37 @@ export default {
             
             if (!targetUser) {
                 return await sock.sendMessage(from, {
-                    text: '❌ Mention or reply to a user to demote'
+                    text: 'Error: Mention or reply to a user to demote'
                 }, { quoted: message });
             }
 
             const groupMetadata = await sock.groupMetadata(from);
-            const normalizeJid = (jid) => jid.split('@')[0].split(':')[0];
-            
-            const targetNormalized = normalizeJid(targetUser);
-            const participant = groupMetadata.participants.find(p => {
-                return normalizeJid(p.id) === targetNormalized;
-            });
+            const participant = groupMetadata.participants.find(p => 
+                p.id.split('@')[0].split(':')[0] === targetUser.split('@')[0].split(':')[0]
+            );
 
             if (!participant?.admin) {
                 return await sock.sendMessage(from, {
-                    text: '❌ User is not an admin'
+                    text: 'Error: User is not an admin'
                 }, { quoted: message });
             }
 
             if (participant.admin === 'superadmin') {
                 return await sock.sendMessage(from, {
-                    text: '❌ Cannot demote group owner'
+                    text: 'Error: Cannot demote group owner'
                 }, { quoted: message });
             }
 
             await sock.groupParticipantsUpdate(from, [targetUser], 'demote');
 
             await sock.sendMessage(from, {
-                text: `✅ User demoted to member\n@${targetUser.split('@')[0]}`,
+                text: `Successfully demoted user to member\n@${targetUser.split('@')[0]}`,
                 mentions: [targetUser]
             }, { quoted: message });
 
         } catch (error) {
             await sock.sendMessage(from, {
-                text: `❌ Failed to demote user\n\n${error.message}`
+                text: `Error: Failed to demote user\n${error.message}`
             }, { quoted: message });
         }
     }
