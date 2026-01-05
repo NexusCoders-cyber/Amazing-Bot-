@@ -1,4 +1,4 @@
-export const groupinfo = {
+export default {
     name: 'groupinfo',
     aliases: ['groupdetails', 'ginfo', 'group'],
     category: 'admin',
