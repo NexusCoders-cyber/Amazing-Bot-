@@ -1,4 +1,4 @@
-export default {
+export const mute = {
     name: 'mute',
     aliases: ['close', 'lockgroup'],
     category: 'admin',
@@ -17,19 +17,19 @@ export default {
             
             if (groupMetadata.announce) {
                 return await sock.sendMessage(from, {
-                    text: '❌ Group is already muted'
+                    text: 'Error: Group is already muted'
                 }, { quoted: message });
             }
 
             await sock.groupSettingUpdate(from, 'announcement');
 
             await sock.sendMessage(from, {
-                text: '🔒 Group muted\n\nOnly admins can send messages now'
+                text: 'Group muted successfully\n\nOnly admins can send messages now'
             }, { quoted: message });
 
         } catch (error) {
             await sock.sendMessage(from, {
-                text: `❌ Failed to mute group\n\n${error.message}`
+                text: `Error: Failed to mute group\n${error.message}`
             }, { quoted: message });
         }
     }
