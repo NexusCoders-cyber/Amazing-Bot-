@@ -19,13 +19,13 @@ export default {
             
             if (number.startsWith('0')) {
                 return await sock.sendMessage(from, {
-                    text: '❌ Use international format without +\nExample: 2347075663318'
+                    text: 'Error: Use international format without +\nExample: 2347075663318'
                 }, { quoted: message });
             }
 
             if (number.length < 10) {
                 return await sock.sendMessage(from, {
-                    text: '❌ Number too short\nProvide valid phone number'
+                    text: 'Error: Number too short. Provide valid phone number'
                 }, { quoted: message });
             }
 
@@ -33,12 +33,12 @@ export default {
             await sock.groupParticipantsUpdate(from, [userJid], 'add');
 
             await sock.sendMessage(from, {
-                text: `✅ User added to group\n@${number}`,
+                text: `Successfully added user to group\n@${number}`,
                 mentions: [userJid]
             }, { quoted: message });
 
         } catch (error) {
-            let errorMessage = '❌ Failed to add user\n\n';
+            let errorMessage = 'Failed to add user\n\n';
             
             if (error.message.includes('participant-exists')) {
                 errorMessage += 'User is already in group';
