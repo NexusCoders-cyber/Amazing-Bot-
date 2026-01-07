@@ -41,7 +41,7 @@ export default {
                 groupInfo += `\nDescription:\n${description}\n`;
             }
 
-            if (admins.length > 0) {
+            if (admins.length > 0 && admins.length <= 20) {
                 groupInfo += `\nAdmins List:\n`;
                 admins.forEach((admin, index) => {
                     const number = admin.id.split('@')[0];
