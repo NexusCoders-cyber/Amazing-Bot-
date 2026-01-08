@@ -15,13 +15,13 @@ export default {
     async execute({ sock, message, args, from, sender, isGroup, isGroupAdmin }) {
         if (!isGroup) {
             return await sock.sendMessage(from, {
-                text: 'Error: This command can only be used in groups'
+                text: '❌ Error: This command can only be used in groups'
             }, { quoted: message });
         }
 
         if (!isGroupAdmin) {
             return await sock.sendMessage(from, {
-                text: 'Error: You need to be a group admin to use this command'
+                text: '❌ Error: You need to be a group admin to use this command'
             }, { quoted: message });
         }
 
@@ -43,7 +43,7 @@ export default {
 
             if (!targetJid) {
                 return await sock.sendMessage(from, {
-                    text: 'Error: Reply to a message, mention a user, or provide their number\n\nUsage: unban @user OR reply to message'
+                    text: '❌ Error: Reply to a message, mention a user, or provide their number\n\nUsage: unban @user OR reply to message'
                 }, { quoted: message });
             }
 
@@ -53,6 +53,7 @@ export default {
                         isBanned: false,
                         banReason: null,
                         bannedBy: null,
+                        bannedAt: null,
                         banUntil: null
                     }
                 });
@@ -62,20 +63,23 @@ export default {
 
             const targetNumber = targetJid.split('@')[0];
             await sock.sendMessage(from, {
-                text: `User Unbanned\n\nUser: @${targetNumber}\nUnbanned by: @${sender.split('@')[0]}\nDate: ${new Date().toLocaleDateString()}\n\nUser can now use bot commands again`,
+                text: `✅ User Unbanned\n\n👤 User: @${targetNumber}\n✅ Unbanned by: @${sender.split('@')[0]}\n📅 Date: ${new Date().toLocaleDateString()}\n\n🎉 User can now use bot commands again`,
                 mentions: [targetJid, sender]
             }, { quoted: message });
 
             try {
                 await sock.sendMessage(targetJid, {
-                    text: `You Are Unbanned\n\nUnbanned by: @${sender.split('@')[0]}\nDate: ${new Date().toLocaleDateString()}\n\nYou can now use bot commands. Please follow the rules`,
+                    text: `🎉 You Are Unbanned\n\n✅ Unbanned by: @${sender.split('@')[0]}\n📅 Date: ${new Date().toLocaleDateString()}\n\n✅ You can now use bot commands. Please follow the rules`,
                     mentions: [sender]
                 });
-            } catch (e) {}
+            } catch (e) {
+                console.error('Failed to notify user:', e);
+            }
 
         } catch (error) {
+            console.error('Unban command error:', error);
             await sock.sendMessage(from, {
-                text: `Error: Failed to unban user\n${error.message}`
+                text: `❌ Error: Failed to unban user\n${error.message}`
             }, { quoted: message });
         }
     }
