@@ -34,18 +34,18 @@ export default {
             const ownerNumber = owner ? owner.split('@')[0] : 'Unknown';
             const groupId = id.split('@')[0];
 
-            let groupInfo = `Group Information\n\nName: ${subject}\nGroup ID: ${groupId}\nOwner: @${ownerNumber}\nCreated: ${creationDate} at ${creationTime}\n\nStatistics:\nTotal Members: ${totalMembers}\nSuper Admins: ${superAdmins.length}\nAdmins: ${regularAdmins.length}\nMembers: ${regularMembers}\n`;
+            let groupInfo = `📊 Group Information\n\n📝 Name: ${subject}\n🆔 Group ID: ${groupId}\n👑 Owner: @${ownerNumber}\n📅 Created: ${creationDate} at ${creationTime}\n\n📈 Statistics:\n├ Total Members: ${totalMembers}\n├ Super Admins: ${superAdmins.length}\n├ Admins: ${regularAdmins.length}\n╰ Members: ${regularMembers}\n`;
 
             if (desc && desc.trim()) {
                 const description = desc.length > 200 ? desc.substring(0, 200) + '...' : desc;
-                groupInfo += `\nDescription:\n${description}\n`;
+                groupInfo += `\n📄 Description:\n${description}\n`;
             }
 
             if (admins.length > 0 && admins.length <= 20) {
-                groupInfo += `\nAdmins List:\n`;
+                groupInfo += `\n👥 Admins List:\n`;
                 admins.forEach((admin, index) => {
                     const number = admin.id.split('@')[0];
-                    const role = admin.admin === 'superadmin' ? 'Super Admin' : 'Admin';
+                    const role = admin.admin === 'superadmin' ? '👑 Super Admin' : '⭐ Admin';
                     groupInfo += `${index + 1}. ${role} - @${number}\n`;
                 });
             }
@@ -66,8 +66,9 @@ export default {
             }, { quoted: message });
 
         } catch (error) {
+            console.error('Group info error:', error);
             await sock.sendMessage(from, {
-                text: `Error: Failed to fetch group info\n${error.message}`
+                text: `❌ Error: Failed to fetch group info\n${error.message}`
             }, { quoted: message });
         }
     }
