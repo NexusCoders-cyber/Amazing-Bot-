@@ -22,38 +22,45 @@ export default {
             
             if (!targetUser) {
                 return await sock.sendMessage(from, {
-                    text: 'Error: Mention or reply to a user to demote'
+                    text: '❌ Error: Mention or reply to a user to demote'
                 }, { quoted: message });
             }
 
             const groupMetadata = await sock.groupMetadata(from);
-            const participant = groupMetadata.participants.find(p => 
-                p.id.split('@')[0].split(':')[0] === targetUser.split('@')[0].split(':')[0]
-            );
+            const targetParticipant = groupMetadata.participants.find(p => {
+                const pNumber = p.id.split(':')[0].split('@')[0];
+                const tNumber = targetUser.split(':')[0].split('@')[0];
+                return pNumber === tNumber;
+            });
 
-            if (!participant?.admin) {
+            if (!targetParticipant?.admin) {
                 return await sock.sendMessage(from, {
-                    text: 'Error: User is not an admin'
+                    text: '❌ Error: User is not an admin'
                 }, { quoted: message });
             }
 
-            if (participant.admin === 'superadmin') {
+            if (targetParticipant.admin === 'superadmin') {
                 return await sock.sendMessage(from, {
-                    text: 'Error: Cannot demote group owner'
+                    text: '❌ Error: Cannot demote group owner'
                 }, { quoted: message });
             }
 
             await sock.groupParticipantsUpdate(from, [targetUser], 'demote');
 
             await sock.sendMessage(from, {
-                text: `Successfully demoted user to member\n@${targetUser.split('@')[0]}`,
+                text: `✅ Successfully demoted user to member\n@${targetUser.split('@')[0]}`,
                 mentions: [targetUser]
             }, { quoted: message });
 
         } catch (error) {
-            await sock.sendMessage(from, {
-                text: `Error: Failed to demote user\n${error.message}`
-            }, { quoted: message });
+            let errorMessage = '❌ Error: Failed to demote user\n';
+            if (error.message.includes('not-authorized') || error.message.includes('forbidden')) {
+                errorMessage += 'Bot lacks admin permission. Please verify bot is admin.';
+            } else {
+                errorMessage += error.message;
+            }
+
+            await sock.sendMessage(from, { text: errorMessage }, { quoted: message });
         }
     }
 };
