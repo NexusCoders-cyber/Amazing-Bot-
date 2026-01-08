@@ -88,7 +88,10 @@ class MessageHandler {
         if (!jid) return '';
         let cleaned = String(jid);
         cleaned = cleaned.replace(/@s\.whatsapp\.net|@c\.us|@g\.us|@broadcast|@lid/g, '');
-        cleaned = cleaned.split(':')[0];
+        if (cleaned.includes(':')) {
+            const parts = cleaned.split(':');
+            cleaned = parts[0];
+        }
         cleaned = cleaned.split('@')[0];
         cleaned = cleaned.replace(/[^0-9]/g, '');
         return cleaned;
