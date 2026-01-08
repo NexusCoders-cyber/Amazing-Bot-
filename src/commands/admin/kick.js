@@ -22,38 +22,44 @@ export default {
             
             if (!targetUser) {
                 return await sock.sendMessage(from, {
-                    text: 'Error: Mention or reply to a user to kick'
+                    text: '❌ Error: Mention or reply to a user to kick'
                 }, { quoted: message });
             }
 
             const botJid = sock.user?.id.split(':')[0] + '@s.whatsapp.net';
             if (targetUser === botJid) {
                 return await sock.sendMessage(from, {
-                    text: 'Error: Cannot kick myself'
+                    text: '❌ Error: Cannot kick myself'
                 }, { quoted: message });
             }
 
             const groupMetadata = await sock.groupMetadata(from);
-            const participant = groupMetadata.participants.find(p => 
-                p.id.split('@')[0].split(':')[0] === targetUser.split('@')[0].split(':')[0]
-            );
+            const targetParticipant = groupMetadata.participants.find(p => {
+                const pNumber = p.id.split(':')[0].split('@')[0];
+                const tNumber = targetUser.split(':')[0].split('@')[0];
+                return pNumber === tNumber;
+            });
 
-            if (participant?.admin) {
+            if (targetParticipant?.admin) {
                 return await sock.sendMessage(from, {
-                    text: 'Error: Cannot kick an admin. Demote first'
+                    text: '❌ Error: Cannot kick an admin. Demote first'
                 }, { quoted: message });
             }
 
             await sock.groupParticipantsUpdate(from, [targetUser], 'remove');
 
             await sock.sendMessage(from, {
-                text: `Successfully removed user from group\n@${targetUser.split('@')[0]}`,
+                text: `✅ Successfully removed user from group\n@${targetUser.split('@')[0]}`,
                 mentions: [targetUser]
             }, { quoted: message });
 
         } catch (error) {
-            let errorMessage = 'Error: Failed to kick user\n';
-            errorMessage += error.message.includes('not-authorized') ? 'Bot lacks permission' : error.message;
+            let errorMessage = '❌ Error: Failed to kick user\n';
+            if (error.message.includes('not-authorized') || error.message.includes('forbidden')) {
+                errorMessage += 'Bot lacks admin permission. Please verify bot is admin.';
+            } else {
+                errorMessage += error.message;
+            }
 
             await sock.sendMessage(from, { text: errorMessage }, { quoted: message });
         }
