@@ -22,32 +22,39 @@ export default {
             
             if (!targetUser) {
                 return await sock.sendMessage(from, {
-                    text: 'Error: Mention or reply to a user to promote'
+                    text: '❌ Error: Mention or reply to a user to promote'
                 }, { quoted: message });
             }
 
             const groupMetadata = await sock.groupMetadata(from);
-            const participant = groupMetadata.participants.find(p => 
-                p.id.split('@')[0].split(':')[0] === targetUser.split('@')[0].split(':')[0]
-            );
+            const targetParticipant = groupMetadata.participants.find(p => {
+                const pNumber = p.id.split(':')[0].split('@')[0];
+                const tNumber = targetUser.split(':')[0].split('@')[0];
+                return pNumber === tNumber;
+            });
 
-            if (participant?.admin) {
+            if (targetParticipant?.admin) {
                 return await sock.sendMessage(from, {
-                    text: 'Error: User is already an admin'
+                    text: '❌ Error: User is already an admin'
                 }, { quoted: message });
             }
 
             await sock.groupParticipantsUpdate(from, [targetUser], 'promote');
 
             await sock.sendMessage(from, {
-                text: `Successfully promoted user to admin\n@${targetUser.split('@')[0]}`,
+                text: `✅ Successfully promoted user to admin\n@${targetUser.split('@')[0]}`,
                 mentions: [targetUser]
             }, { quoted: message });
 
         } catch (error) {
-            await sock.sendMessage(from, {
-                text: `Error: Failed to promote user\n${error.message}`
-            }, { quoted: message });
+            let errorMessage = '❌ Error: Failed to promote user\n';
+            if (error.message.includes('not-authorized') || error.message.includes('forbidden')) {
+                errorMessage += 'Bot lacks admin permission. Please verify bot is admin.';
+            } else {
+                errorMessage += error.message;
+            }
+
+            await sock.sendMessage(from, { text: errorMessage }, { quoted: message });
         }
     }
 };
