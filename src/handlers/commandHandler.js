@@ -119,19 +119,24 @@ class CommandHandler {
         if (!jid) return '';
         let cleaned = String(jid);
         cleaned = cleaned.replace(/@s\.whatsapp\.net|@c\.us|@g\.us|@broadcast|@lid/g, '');
-        cleaned = cleaned.split(':')[0];
+        if (cleaned.includes(':')) {
+            const parts = cleaned.split(':');
+            cleaned = parts[0];
+        }
         cleaned = cleaned.split('@')[0];
         cleaned = cleaned.replace(/[^0-9]/g, '');
         return cleaned;
     }
 
-    async getGroupMetadata(sock, groupJid) {
+    async getGroupMetadata(sock, groupJid, forceRefresh = false) {
         try {
             const cacheKey = groupJid;
-            const cached = this.groupMetadataCache.get(cacheKey);
             
-            if (cached && (Date.now() - cached.timestamp) < 60000) {
-                return cached.data;
+            if (!forceRefresh) {
+                const cached = this.groupMetadataCache.get(cacheKey);
+                if (cached && (Date.now() - cached.timestamp) < 60000) {
+                    return cached.data;
+                }
             }
             
             const metadata = await sock.groupMetadata(groupJid);
@@ -182,25 +187,24 @@ class CommandHandler {
                 return false;
             }
 
-            const metadata = await this.getGroupMetadata(sock, groupJid);
+            const metadata = await this.getGroupMetadata(sock, groupJid, true);
             if (!metadata || !metadata.participants) {
                 return false;
             }
 
             const botNumber = this.normalizePhoneNumber(sock.user.id);
             
-            const participant = metadata.participants.find(p => {
-                const pNumber = this.normalizePhoneNumber(p.id);
-                return pNumber === botNumber;
-            });
-
-            if (!participant) {
-                logger.debug(`Bot ${botNumber} not found in group participants`);
-                return false;
+            let isAdmin = false;
+            for (const participant of metadata.participants) {
+                const pNumber = this.normalizePhoneNumber(participant.id);
+                
+                if (pNumber === botNumber) {
+                    isAdmin = participant.admin === 'admin' || participant.admin === 'superadmin';
+                    logger.debug(`Bot admin check: ${isAdmin} (role: ${participant.admin || 'member'})`);
+                    break;
+                }
             }
 
-            const isAdmin = participant.admin === 'admin' || participant.admin === 'superadmin';
-            logger.debug(`Bot admin check: ${isAdmin} (role: ${participant.admin || 'member'})`);
             return isAdmin;
         } catch (error) {
             logger.error('Error checking bot admin:', error);
@@ -406,7 +410,7 @@ class CommandHandler {
             }
         }
 
-        if (isGroup && command.botAdminRequired && !isBotAdmin) {
+        if (isGroup && command.botAdminRequired && !isBotAdmin && !isOwnerUser && !isSudoUser) {
             await sock.sendMessage(from, {
                 text: 'Bot Admin Required - I need admin privileges to execute this command. Please make me an admin first.'
             }, { quoted: message });
@@ -454,7 +458,7 @@ class CommandHandler {
                     isGroupAdmin = await this.isGroupAdmin(sock, from, sender) || isOwnerUser || isSudoUser;
                     isBotAdmin = await this.isBotGroupAdmin(sock, from);
                     
-                    logger.debug(`Group permissions - User Admin: ${isGroupAdmin}, Bot Admin: ${isBotAdmin}`);
+                    logger.debug(`Group permissions - User Admin: ${isGroupAdmin}, Bot Admin: ${isBotAdmin}, Owner: ${isOwnerUser}, Sudo: ${isSudoUser}`);
                 } catch (error) {
                     logger.error('Error checking group permissions:', error);
                     isGroupAdmin = isOwnerUser || isSudoUser;
