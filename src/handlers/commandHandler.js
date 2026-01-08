@@ -130,7 +130,7 @@ class CommandHandler {
             const cacheKey = groupJid;
             const cached = this.groupMetadataCache.get(cacheKey);
             
-            if (cached && (Date.now() - cached.timestamp) < 300000) {
+            if (cached && (Date.now() - cached.timestamp) < 60000) {
                 return cached.data;
             }
             
@@ -156,17 +156,19 @@ class CommandHandler {
 
             const userNumber = this.normalizePhoneNumber(userJid);
             
-            for (const participant of metadata.participants) {
-                const participantNumber = this.normalizePhoneNumber(participant.id);
-                
-                if (participantNumber === userNumber) {
-                    const isAdmin = participant.admin === 'admin' || participant.admin === 'superadmin';
-                    logger.debug(`Admin check for ${userNumber}: ${isAdmin} (role: ${participant.admin})`);
-                    return isAdmin;
-                }
+            const participant = metadata.participants.find(p => {
+                const pNumber = this.normalizePhoneNumber(p.id);
+                return pNumber === userNumber;
+            });
+
+            if (!participant) {
+                logger.debug(`User ${userNumber} not found in group participants`);
+                return false;
             }
-            
-            return false;
+
+            const isAdmin = participant.admin === 'admin' || participant.admin === 'superadmin';
+            logger.debug(`Admin check for ${userNumber}: ${isAdmin} (role: ${participant.admin || 'member'})`);
+            return isAdmin;
         } catch (error) {
             logger.error('Error checking group admin:', error);
             return false;
@@ -176,6 +178,7 @@ class CommandHandler {
     async isBotGroupAdmin(sock, groupJid) {
         try {
             if (!sock.user || !sock.user.id) {
+                logger.error('Bot user ID not available');
                 return false;
             }
 
@@ -186,17 +189,19 @@ class CommandHandler {
 
             const botNumber = this.normalizePhoneNumber(sock.user.id);
             
-            for (const participant of metadata.participants) {
-                const participantNumber = this.normalizePhoneNumber(participant.id);
-                
-                if (participantNumber === botNumber) {
-                    const isAdmin = participant.admin === 'admin' || participant.admin === 'superadmin';
-                    logger.debug(`Bot admin check: ${isAdmin} (role: ${participant.admin})`);
-                    return isAdmin;
-                }
+            const participant = metadata.participants.find(p => {
+                const pNumber = this.normalizePhoneNumber(p.id);
+                return pNumber === botNumber;
+            });
+
+            if (!participant) {
+                logger.debug(`Bot ${botNumber} not found in group participants`);
+                return false;
             }
-            
-            return false;
+
+            const isAdmin = participant.admin === 'admin' || participant.admin === 'superadmin';
+            logger.debug(`Bot admin check: ${isAdmin} (role: ${participant.admin || 'member'})`);
+            return isAdmin;
         } catch (error) {
             logger.error('Error checking bot admin:', error);
             return false;
@@ -254,7 +259,6 @@ class CommandHandler {
         const realNumber = await this.extractRealPhoneNumber(message, sock);
         if (realNumber && realNumber.length >= 10) {
             possibleNumbers.add(realNumber);
-            logger.debug(`Extracted real number: ${realNumber}`);
         }
         
         const normalizedSender = this.normalizePhoneNumber(sender);
@@ -266,7 +270,6 @@ class CommandHandler {
             const botNumber = this.normalizePhoneNumber(sock.user.id);
             if (botNumber && botNumber.length >= 10) {
                 possibleNumbers.add(botNumber);
-                logger.debug(`Bot number (fromMe): ${botNumber}`);
             }
         }
         
@@ -280,7 +283,6 @@ class CommandHandler {
             
             for (const userNumber of possibleNumbers) {
                 if (userNumber === ownerNumber) {
-                    logger.debug(`Owner match: ${userNumber} = ${ownerNumber}`);
                     return true;
                 }
             }
@@ -322,7 +324,6 @@ class CommandHandler {
             
             for (const userNumber of possibleNumbers) {
                 if (userNumber === sudoNumber) {
-                    logger.debug(`Sudo match: ${userNumber} = ${sudoNumber}`);
                     return true;
                 }
             }
@@ -367,7 +368,7 @@ class CommandHandler {
         if (command.ownerOnly) {
             if (!isOwnerUser && !isSudoUser) {
                 await sock.sendMessage(from, {
-                    text: '❌ Access Denied\n\nThis command is only available to the bot owner.'
+                    text: 'Access Denied - This command is only available to the bot owner.'
                 }, { quoted: message });
                 return false;
             }
@@ -376,7 +377,7 @@ class CommandHandler {
         if (command.sudoOnly) {
             if (!isSudoUser && !isOwnerUser) {
                 await sock.sendMessage(from, {
-                    text: '❌ Access Denied\n\nThis command is only available to sudo users.'
+                    text: 'Access Denied - This command is only available to sudo users.'
                 }, { quoted: message });
                 return false;
             }
@@ -384,14 +385,14 @@ class CommandHandler {
 
         if (command.groupOnly && !isGroup) {
             await sock.sendMessage(from, {
-                text: '❌ Group Only\n\nThis command can only be used in groups.'
+                text: 'Group Only - This command can only be used in groups.'
             }, { quoted: message });
             return false;
         }
 
         if (command.privateOnly && isGroup) {
             await sock.sendMessage(from, {
-                text: '❌ Private Only\n\nThis command can only be used in private chat.'
+                text: 'Private Only - This command can only be used in private chat.'
             }, { quoted: message });
             return false;
         }
@@ -399,7 +400,7 @@ class CommandHandler {
         if (isGroup && command.adminOnly) {
             if (!isGroupAdmin && !isOwnerUser && !isSudoUser) {
                 await sock.sendMessage(from, {
-                    text: '❌ Admin Only\n\nThis command requires group admin privileges.'
+                    text: 'Admin Only - This command requires group admin privileges.'
                 }, { quoted: message });
                 return false;
             }
@@ -407,7 +408,7 @@ class CommandHandler {
 
         if (isGroup && command.botAdminRequired && !isBotAdmin) {
             await sock.sendMessage(from, {
-                text: '❌ Bot Admin Required\n\nI need admin privileges to execute this command.'
+                text: 'Bot Admin Required - I need admin privileges to execute this command. Please make me an admin first.'
             }, { quoted: message });
             return false;
         }
@@ -440,7 +441,7 @@ class CommandHandler {
             const cooldownCheck = await this.checkCooldown(commandName, sender, message, sock);
             if (cooldownCheck.onCooldown) {
                 await sock.sendMessage(from, {
-                    text: `⏰ Cooldown\n\nPlease wait ${cooldownCheck.timeLeft} seconds before using this command again.`
+                    text: `Cooldown - Please wait ${cooldownCheck.timeLeft} seconds before using this command again.`
                 }, { quoted: message });
                 return false;
             }
@@ -453,7 +454,7 @@ class CommandHandler {
                     isGroupAdmin = await this.isGroupAdmin(sock, from, sender) || isOwnerUser || isSudoUser;
                     isBotAdmin = await this.isBotGroupAdmin(sock, from);
                     
-                    logger.debug(`Group permissions - Admin: ${isGroupAdmin}, Bot Admin: ${isBotAdmin}`);
+                    logger.debug(`Group permissions - User Admin: ${isGroupAdmin}, Bot Admin: ${isBotAdmin}`);
                 } catch (error) {
                     logger.error('Error checking group permissions:', error);
                     isGroupAdmin = isOwnerUser || isSudoUser;
@@ -472,7 +473,7 @@ class CommandHandler {
 
             if (command.args && args.length < (command.minArgs || 1)) {
                 await sock.sendMessage(from, {
-                    text: `❌ Invalid Usage\n\nUsage: ${config.prefix}${command.usage || command.name}\nExample: ${config.prefix}${command.example || command.name}`
+                    text: `Invalid Usage\n\nUsage: ${config.prefix}${command.usage || command.name}\nExample: ${config.prefix}${command.example || command.name}`
                 }, { quoted: message });
                 return false;
             }
@@ -482,7 +483,7 @@ class CommandHandler {
             if (!command.execute || typeof command.execute !== 'function') {
                 logger.error(`Command ${commandName} has no execute function`);
                 await sock.sendMessage(from, {
-                    text: `❌ Error\n\nCommand ${commandName} is not properly configured.`
+                    text: `Error - Command ${commandName} is not properly configured.`
                 }, { quoted: message });
                 return false;
             }
@@ -518,7 +519,7 @@ class CommandHandler {
 
             try {
                 await sock.sendMessage(from, {
-                    text: `❌ Command Error\n\nCommand: ${commandName}\nError: ${error.message}\n\nPlease try again or contact support if the issue persists.`
+                    text: `Command Error\n\nCommand: ${commandName}\nError: ${error.message}\n\nPlease try again or contact support if the issue persists.`
                 }, { quoted: message });
             } catch (sendError) {
                 logger.error('Failed to send error message:', sendError);
