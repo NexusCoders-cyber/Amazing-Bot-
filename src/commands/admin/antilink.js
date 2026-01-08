@@ -17,19 +17,19 @@ export default {
     async execute({ sock, message, args, from, sender, isGroup, isGroupAdmin, isBotAdmin }) {
         if (!isGroup) {
             return await sock.sendMessage(from, {
-                text: 'Error: This command works in groups only'
+                text: '❌ Error: This command works in groups only'
             }, { quoted: message });
         }
 
         if (!isGroupAdmin) {
             return await sock.sendMessage(from, {
-                text: 'Error: You need admin privileges to use this command'
+                text: '❌ Error: You need admin privileges to use this command'
             }, { quoted: message });
         }
 
         if (!isBotAdmin) {
             return await sock.sendMessage(from, {
-                text: 'Error: Make me an admin first to use this feature'
+                text: '❌ Error: Make me an admin first to use this feature'
             }, { quoted: message });
         }
 
@@ -47,7 +47,7 @@ export default {
 
             if (!action) {
                 return await sock.sendMessage(from, {
-                    text: `Antilink Status\n\nCurrent Status: ${currentStatus ? 'Enabled' : 'Disabled'}\n\nUsage: ${config.prefix}antilink [on/off]\nExample: ${config.prefix}antilink on`
+                    text: `📊 Antilink Status\n\nCurrent Status: ${currentStatus ? '✅ Enabled' : '❌ Disabled'}\n\nUsage: ${config.prefix}antilink [on/off]\nExample: ${config.prefix}antilink on`
                 }, { quoted: message });
             }
 
@@ -58,7 +58,7 @@ export default {
                 newStatus = false;
             } else {
                 return await sock.sendMessage(from, {
-                    text: 'Error: Invalid option. Use: on/off or enable/disable'
+                    text: '❌ Error: Invalid option. Use: on/off or enable/disable'
                 }, { quoted: message });
             }
 
@@ -71,17 +71,24 @@ export default {
             }
 
             const actionText = newStatus ? 
-                'Links will be automatically deleted' : 
-                'Links are now allowed';
+                '✅ Links will be automatically deleted' : 
+                '⚠️ Links are now allowed';
 
             await sock.sendMessage(from, {
-                text: `Antilink ${newStatus ? 'Enabled' : 'Disabled'}\n\nStatus: ${newStatus ? 'Active' : 'Inactive'}\nBy: @${sender.split('@')[0]}\nDate: ${new Date().toLocaleDateString()}\n\n${actionText}`,
+                text: `${newStatus ? '✅' : '❌'} Antilink ${newStatus ? 'Enabled' : 'Disabled'}\n\nStatus: ${newStatus ? 'Active' : 'Inactive'}\nBy: @${sender.split('@')[0]}\nDate: ${new Date().toLocaleDateString()}\n\n${actionText}`,
                 mentions: [sender]
             }, { quoted: message });
 
         } catch (error) {
+            let errorMessage = '❌ Error: Failed to update antilink settings\n';
+            if (error.message.includes('not-authorized') || error.message.includes('forbidden')) {
+                errorMessage += 'Bot lacks admin permission. Please verify bot is admin.';
+            } else {
+                errorMessage += 'Try again later';
+            }
+
             await sock.sendMessage(from, {
-                text: 'Error: Failed to update antilink settings. Try again later'
+                text: errorMessage
             }, { quoted: message });
         }
     }
