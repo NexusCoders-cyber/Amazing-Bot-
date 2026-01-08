@@ -17,19 +17,26 @@ export default {
             
             if (!groupMetadata.announce) {
                 return await sock.sendMessage(from, {
-                    text: 'Error: Group is already open'
+                    text: '❌ Error: Group is already open'
                 }, { quoted: message });
             }
 
             await sock.groupSettingUpdate(from, 'not_announcement');
 
             await sock.sendMessage(from, {
-                text: 'Group unmuted successfully\n\nAll members can send messages now'
+                text: '✅ Group unmuted successfully\n\n🔓 All members can send messages now'
             }, { quoted: message });
 
         } catch (error) {
+            let errorMessage = '❌ Error: Failed to unmute group\n';
+            if (error.message.includes('not-authorized') || error.message.includes('forbidden')) {
+                errorMessage += 'Bot lacks admin permission. Please verify bot is admin.';
+            } else {
+                errorMessage += error.message;
+            }
+
             await sock.sendMessage(from, {
-                text: `Error: Failed to unmute group\n${error.message}`
+                text: errorMessage
             }, { quoted: message });
         }
     }
