@@ -1,3 +1,5 @@
+import { updateUser, getUser } from '../../models/User.js';
+
 const userWarnings = new Map();
 
 export default {
@@ -28,34 +30,60 @@ export default {
                 reason = args.slice(1).join(' ') || reason;
             } else {
                 return await sock.sendMessage(from, {
-                    text: '❌ Mention or reply to a user to warn'
+                    text: '❌ Error: Mention or reply to a user to warn'
                 }, { quoted: message });
             }
 
             if (targetJid === sender) {
                 return await sock.sendMessage(from, {
-                    text: '❌ You cannot warn yourself'
+                    text: '❌ Error: You cannot warn yourself'
                 }, { quoted: message });
             }
 
-            const warnings = userWarnings.get(targetJid) || [];
+            const warningKey = `${from}_${targetJid}`;
+            const warnings = userWarnings.get(warningKey) || [];
             
             const newWarning = {
                 reason: reason,
                 warnedBy: sender,
                 warnedAt: new Date(),
-                expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000)
+                groupId: from
             };
 
             warnings.push(newWarning);
-            userWarnings.set(targetJid, warnings);
+            userWarnings.set(warningKey, warnings);
 
             const warningCount = warnings.length;
+            const targetNumber = targetJid.split('@')[0];
+            const warnedByNumber = sender.split('@')[0];
 
-            let responseText = `⚠️ User Warned\n\nUser: @${targetJid.split('@')[0]}\nReason: ${reason}\nWarned by: @${sender.split('@')[0]}\nWarning: ${warningCount}/3\nExpires: 24 hours`;
+            let responseText = `⚠️ User Warned\n\n`;
+            responseText += `👤 User: @${targetNumber}\n`;
+            responseText += `📝 Reason: ${reason}\n`;
+            responseText += `👮 Warned by: @${warnedByNumber}\n`;
+            responseText += `📊 Warnings: ${warningCount}/3\n`;
+            responseText += `📅 Date: ${new Date().toLocaleDateString()}`;
 
             if (warningCount >= 3) {
-                responseText += `\n\n🚫 AUTO-BAN: User has received 3 warnings`;
+                responseText += `\n\n🚫 AUTO-ACTION: User has received 3 warnings!`;
+                
+                try {
+                    await updateUser(targetJid, {
+                        $set: {
+                            isBanned: true,
+                            banReason: `3 warnings in group`,
+                            bannedBy: sender,
+                            bannedAt: new Date()
+                        }
+                    });
+                    
+                    responseText += `\n⛔ User has been banned from using the bot`;
+                } catch (dbError) {
+                    console.error('Failed to ban user:', dbError);
+                }
+            } else {
+                const remaining = 3 - warningCount;
+                responseText += `\n⚠️ ${remaining} warning${remaining > 1 ? 's' : ''} remaining before ban`;
             }
 
             await sock.sendMessage(from, {
@@ -63,9 +91,19 @@ export default {
                 mentions: [targetJid, sender]
             }, { quoted: message });
 
+            try {
+                await sock.sendMessage(targetJid, {
+                    text: `⚠️ You Have Been Warned\n\n📝 Reason: ${reason}\n👮 By: @${warnedByNumber}\n📊 Warning: ${warningCount}/3\n📅 Date: ${new Date().toLocaleDateString()}\n\n⚠️ Please follow the group rules`,
+                    mentions: [sender]
+                });
+            } catch (e) {
+                console.error('Failed to notify user:', e);
+            }
+
         } catch (error) {
+            console.error('Warn command error:', error);
             await sock.sendMessage(from, {
-                text: `❌ Failed to warn user\n\n${error.message}`
+                text: `❌ Error: Failed to warn user\n${error.message}`
             }, { quoted: message });
         }
     }
