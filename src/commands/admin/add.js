@@ -19,31 +19,32 @@ export default {
             
             if (number.startsWith('0')) {
                 return await sock.sendMessage(from, {
-                    text: 'Error: Use international format without +\nExample: 2347075663318'
+                    text: '❌ Error: Use international format without +\nExample: 2347075663318'
                 }, { quoted: message });
             }
 
             if (number.length < 10) {
                 return await sock.sendMessage(from, {
-                    text: 'Error: Number too short. Provide valid phone number'
+                    text: '❌ Error: Number too short. Provide valid phone number'
                 }, { quoted: message });
             }
 
             const userJid = number + '@s.whatsapp.net';
+            
             await sock.groupParticipantsUpdate(from, [userJid], 'add');
 
             await sock.sendMessage(from, {
-                text: `Successfully added user to group\n@${number}`,
+                text: `✅ Successfully added user to group\n@${number}`,
                 mentions: [userJid]
             }, { quoted: message });
 
         } catch (error) {
-            let errorMessage = 'Failed to add user\n\n';
+            let errorMessage = '❌ Failed to add user\n\n';
             
             if (error.message.includes('participant-exists')) {
                 errorMessage += 'User is already in group';
-            } else if (error.message.includes('not-authorized')) {
-                errorMessage += 'Bot lacks permission';
+            } else if (error.message.includes('not-authorized') || error.message.includes('forbidden')) {
+                errorMessage += 'Bot lacks admin permission. Please verify bot is admin.';
             } else if (error.message.includes('invite-restrict')) {
                 errorMessage += 'Group has invite restrictions';
             } else {
