@@ -17,19 +17,26 @@ export default {
             
             if (groupMetadata.announce) {
                 return await sock.sendMessage(from, {
-                    text: 'Error: Group is already muted'
+                    text: '❌ Error: Group is already muted'
                 }, { quoted: message });
             }
 
             await sock.groupSettingUpdate(from, 'announcement');
 
             await sock.sendMessage(from, {
-                text: 'Group muted successfully\n\nOnly admins can send messages now'
+                text: '✅ Group muted successfully\n\n🔒 Only admins can send messages now'
             }, { quoted: message });
 
         } catch (error) {
+            let errorMessage = '❌ Error: Failed to mute group\n';
+            if (error.message.includes('not-authorized') || error.message.includes('forbidden')) {
+                errorMessage += 'Bot lacks admin permission. Please verify bot is admin.';
+            } else {
+                errorMessage += error.message;
+            }
+
             await sock.sendMessage(from, {
-                text: `Error: Failed to mute group\n${error.message}`
+                text: errorMessage
             }, { quoted: message });
         }
     }
