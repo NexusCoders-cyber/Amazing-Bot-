@@ -19,20 +19,25 @@ export default {
             
             if (newName.length > 100) {
                 return await sock.sendMessage(from, {
-                    text: 'Error: Group name too long (max 100 characters)'
+                    text: '❌ Error: Group name too long (max 100 characters)'
                 }, { quoted: message });
             }
 
             await sock.groupUpdateSubject(from, newName);
 
             await sock.sendMessage(from, {
-                text: `Group name changed successfully to:\n${newName}`
+                text: `✅ Group name changed successfully to:\n${newName}`
             }, { quoted: message });
 
         } catch (error) {
-            await sock.sendMessage(from, {
-                text: `Error: Failed to change group name\n${error.message}`
-            }, { quoted: message });
+            let errorMessage = '❌ Error: Failed to change group name\n';
+            if (error.message.includes('not-authorized') || error.message.includes('forbidden')) {
+                errorMessage += 'Bot lacks admin permission. Please verify bot is admin.';
+            } else {
+                errorMessage += error.message;
+            }
+
+            await sock.sendMessage(from, { text: errorMessage }, { quoted: message });
         }
     }
 };
