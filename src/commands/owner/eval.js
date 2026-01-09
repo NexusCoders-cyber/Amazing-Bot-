@@ -2,10 +2,11 @@ import config from '../../config.js';
 
 export default {
     name: 'eval',
-    aliases: ['e', 'evaluate'],
+    aliases: ['e', 'evaluate', 'run'],
     category: 'owner',
-    description: 'Execute JavaScript code (DANGEROUS - Owner Only)',
+    description: 'Execute JavaScript code - Owner only',
     usage: 'eval <code>',
+    example: 'eval 2+2\neval sock.user.id\neval await sock.groupMetadata(from)\neval Object.keys(config)',
     cooldown: 0,
     permissions: ['owner'],
     ownerOnly: true,
@@ -16,7 +17,7 @@ export default {
         try {
             if (process.env.DISABLE_EVAL === 'true') {
                 await sock.sendMessage(from, {
-                    text: `🚫 *Eval Command Disabled*\n\nThe eval command has been disabled via environment configuration for security reasons.\n\nTo enable: Set DISABLE_EVAL=false in your environment variables.`
+                    text: 'Eval command is disabled. Set DISABLE_EVAL=false to enable.'
                 }, { quoted: message });
                 return;
             }
@@ -24,15 +25,11 @@ export default {
             const code = args.join(' ');
             
             const blockedPatterns = [
-                /process\.env/i,
-                /\.env/i,
-                /apiKey/i,
-                /secret/i,
-                /token/i,
-                /password/i,
-                /require\s*\(\s*['"]fs['"]\s*\)/i,
+                /process\.env\..*SECRET/i,
+                /process\.env\..*KEY/i,
+                /process\.env\..*PASSWORD/i,
+                /process\.env\..*TOKEN/i,
                 /require\s*\(\s*['"]child_process['"]\s*\)/i,
-                /import\s+.*from\s+['"]fs['"]/i,
                 /import\s+.*from\s+['"]child_process['"]/i
             ];
             
@@ -40,25 +37,33 @@ export default {
             
             if (hasBlockedPattern) {
                 await sock.sendMessage(from, {
-                    text: `🚫 *Security Block*\n\n⚠️ The code contains potentially dangerous patterns:\n• Environment variable access\n• File system operations\n• Process manipulation\n• Sensitive data references\n\n*These operations are blocked for security.*\n\nUse dedicated commands for file/system operations instead.`
+                    text: 'Blocked: Code contains restricted operations (environment secrets, process manipulation)'
                 }, { quoted: message });
                 return;
             }
-            
-            await sock.sendMessage(from, {
-                text: `⚠️ *SECURITY WARNING*\n\n🔴 **DANGER:** Executing arbitrary code\n📝 **Code:** \`${code.length > 100 ? code.substring(0, 100) + '...' : code}\`\n\n⏳ Executing...`
-            }, { quoted: message });
             
             const startTime = Date.now();
             let result;
             let error = null;
             
             try {
-                const asyncCode = `(async () => { ${code} })()`;
+                const asyncCode = `(async () => { return ${code} })()`;
                 result = await eval(asyncCode);
                 
-                if (typeof result === 'object') {
-                    result = JSON.stringify(result, null, 2);
+                if (typeof result === 'object' && result !== null) {
+                    result = JSON.stringify(result, (key, value) => {
+                        if (typeof value === 'function') {
+                            return `[Function: ${value.name || 'anonymous'}]`;
+                        }
+                        if (typeof value === 'bigint') {
+                            return value.toString() + 'n';
+                        }
+                        return value;
+                    }, 2);
+                } else if (typeof result === 'function') {
+                    result = `[Function: ${result.name || 'anonymous'}]`;
+                } else if (typeof result === 'undefined') {
+                    result = 'undefined';
                 } else {
                     result = String(result);
                 }
@@ -76,12 +81,15 @@ export default {
                 
             } catch (evalError) {
                 error = evalError;
-                result = error.stack || error.message || 'Unknown error';
+                result = error.message || 'Unknown error';
             }
             
             const executionTime = Date.now() - startTime;
             
-            const response = `${error ? '❌' : '✅'} *Code Execution ${error ? 'Failed' : 'Complete'}*\n\n📝 **Code:**\n\`\`\`javascript\n${code}\n\`\`\`\n\n📤 **Result:**\n\`\`\`\n${result.length > 2000 ? result.substring(0, 2000) + '...[truncated]' : result}\n\`\`\`\n\n⏱️ **Execution Time:** ${executionTime}ms\n🔒 **Security Level:** MAXIMUM RISK\n\n${error ? '⚠️ *Error occurred during execution*' : '✅ *Execution completed successfully*'}`;
+            let response = `${error ? '❌ Error' : '✅ Success'}\n\n`;
+            response += `Code:\n${code}\n\n`;
+            response += `Result:\n${result.length > 3500 ? result.substring(0, 3500) + '...[truncated]' : result}\n\n`;
+            response += `Time: ${executionTime}ms`;
             
             await sock.sendMessage(from, { text: response }, { quoted: message });
             
@@ -89,7 +97,7 @@ export default {
             console.error('Eval command error:', error);
             
             await sock.sendMessage(from, {
-                text: `❌ *Critical Eval Error*\n\n**Error:** ${error.message}\n\n🚨 **SECURITY ALERT:** Code execution failed\n⚠️ **This could indicate a security issue or system error**\n\n**Recommended actions:**\n• Check system security\n• Review executed code\n• Monitor for suspicious activity\n• Consider restarting bot if needed`
+                text: `Eval error: ${error.message}`
             }, { quoted: message });
         }
     }
