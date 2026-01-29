@@ -533,23 +533,39 @@ function setupProcessHandlers() {
 
     process.on('uncaughtException', (error) => {
         logger.error('Uncaught Exception:', error);
-        errorHandler.handleError('uncaughtException', error);
-        process.exit(1);
+        if (error.message && error.message.includes('Session')) {
+            logger.error('Session error detected, restarting...');
+            setTimeout(() => process.exit(2), 2000);
+        } else {
+            errorHandler.handleError('uncaughtException', error);
+            setTimeout(() => process.exit(1), 2000);
+        }
     });
 
     process.on('SIGINT', async () => {
         logger.info('Received SIGINT - Graceful shutdown initiated');
-        if (sock) await sock.logout();
+        if (sock) {
+            try {
+                await sock.logout();
+            } catch (error) {
+                logger.error('Error during logout:', error);
+            }
+        }
         process.exit(0);
     });
 
     process.on('SIGTERM', async () => {
         logger.info('Received SIGTERM - Graceful shutdown initiated');
-        if (sock) await sock.logout();
+        if (sock) {
+            try {
+                await sock.logout();
+            } catch (error) {
+                logger.error('Error during logout:', error);
+            }
+        }
         process.exit(0);
     });
 }
-
 async function loadSavedSettings() {
     try {
         const mongoose = await import('mongoose');
