@@ -357,10 +357,7 @@ async function setupEventHandlers(sock, saveCreds) {
         }
     });
     
-    logger.info('✅ All event handlers registered successfully');
-    logger.info(`📋 Message Handler Status: ${messageHandler.isReady ? 'READY ✅' : 'NOT READY ❌'}`);
-}
-setInterval(() => {
+    setInterval(() => {
         if (sock && sock.user) {
             sock.sendPresenceUpdate('available').catch(() => {});
         }
@@ -369,6 +366,7 @@ setInterval(() => {
     logger.info('✅ All event handlers registered successfully');
     logger.info(`📋 Message Handler Status: ${messageHandler.isReady ? 'READY ✅' : 'NOT READY ❌'}`);
 }
+
 async function establishWhatsAppConnection() {
     return new Promise(async (resolve, reject) => {
         try {
@@ -534,6 +532,7 @@ async function establishWhatsAppConnection() {
         }
     });
 }
+
 function setupProcessHandlers() {
     process.on('unhandledRejection', (reason, promise) => {
         logger.error('Unhandled Promise Rejection:', reason);
@@ -575,6 +574,7 @@ function setupProcessHandlers() {
         process.exit(0);
     });
 }
+
 async function loadSavedSettings() {
     try {
         const mongoose = await import('mongoose');
