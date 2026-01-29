@@ -34,9 +34,11 @@ const app = express();
 let sock = null;
 let isInitialized = false;
 let reconnectAttempts = 0;
+let isShuttingDown = false;
+let connectionTimeout = null;
 
 const SESSION_PATH = path.join(process.cwd(), 'cache', 'auth_info_baileys');
-const MAX_RECONNECT = 3;
+const MAX_RECONNECT = 5;
 
 async function createDirectoryStructure() {
     const directories = [
@@ -67,11 +69,11 @@ async function displayStartupBanner() {
 
     const gradient = (await import('gradient-string')).default;
     console.log(gradient.rainbow(banner));
-    console.log(chalk.cyan.bold('\nðŸ§  Amazing Bot ðŸ§  v1 created by Ilom'));
+    console.log(chalk.cyan.bold('\n🧠 Amazing Bot 🧠 v1 created by Ilom'));
     console.log(chalk.green.bold('Powered by Raphael\n'));
-    console.log(chalk.yellow('â•'.repeat(65)));
-    console.log(chalk.green('ðŸš€ Initializing Ilom WhatsApp Bot System...'));
-    console.log(chalk.yellow('â•'.repeat(65)));
+    console.log(chalk.yellow('═'.repeat(65)));
+    console.log(chalk.green('🚀 Initializing Ilom WhatsApp Bot System...'));
+    console.log(chalk.yellow('═'.repeat(65)));
 }
 
 async function processSessionCredentials() {
@@ -83,12 +85,12 @@ async function processSessionCredentials() {
             const sessionId = process.env.SESSION_ID.trim();
             let sessionData;
 
-            logger.info('ðŸ” Processing session credentials from environment...');
+            logger.info('🔑 Processing session credentials from environment...');
 
-            if (sessionId.startsWith('sypherâ„¢--') || sessionId.startsWith('sypher sypherâ„¢--')) {
+            if (sessionId.startsWith('sypher™--') || sessionId.startsWith('sypher sypher™--')) {
                 try {
-                    logger.info('ðŸ“¥ Detected sypherâ„¢ session format, downloading from server...');
-                    const sessdata = sessionId.replace("sypher sypherâ„¢--", "").replace("sypherâ„¢--", "").trim();
+                    logger.info('🔥 Detected sypher™ session format, downloading from server...');
+                    const sessdata = sessionId.replace("sypher sypher™--", "").replace("sypher™--", "").trim();
                     
                     if (!sessdata || sessdata.length < 10) {
                         throw new Error('Invalid sypher session ID format');
@@ -110,36 +112,36 @@ async function processSessionCredentials() {
 
                     await new Promise((resolve, reject) => {
                         writer.on('finish', () => {
-                            logger.info('âœ… Session credentials downloaded successfully!');
+                            logger.info('✅ Session credentials downloaded successfully!');
                             resolve();
                         });
                         writer.on('error', (err) => {
-                            logger.error('âŒ Failed to download session file:', err);
+                            logger.error('❌ Failed to download session file:', err);
                             reject(err);
                         });
                     });
                     
                     return true;
                 } catch (error) {
-                    logger.warn(`âš ï¸ Sypher session download failed: ${error.message}`);
-                    logger.info('ðŸ’¡ Falling back to alternative session formats...');
+                    logger.warn(`⚠️ Sypher session download failed: ${error.message}`);
+                    logger.info('💡 Falling back to alternative session formats...');
                 }
             }
 
             if (sessionId.startsWith('Ilom~')) {
                 const cleanId = sessionId.replace('Ilom~', '');
                 sessionData = JSON.parse(Buffer.from(cleanId, 'base64').toString());
-                logger.info('âœ… Processed Ilom format session');
+                logger.info('✅ Processed Ilom format session');
             } else if (sessionId.startsWith('{') && sessionId.endsWith('}')) {
                 sessionData = JSON.parse(sessionId);
-                logger.info('âœ… Processed JSON format session');
+                logger.info('✅ Processed JSON format session');
             } else {
                 try {
                     sessionData = JSON.parse(Buffer.from(sessionId, 'base64').toString());
-                    logger.info('âœ… Processed base64 format session');
+                    logger.info('✅ Processed base64 format session');
                 } catch {
                     sessionData = JSON.parse(sessionId);
-                    logger.info('âœ… Processed direct JSON format session');
+                    logger.info('✅ Processed direct JSON format session');
                 }
             }
 
@@ -156,18 +158,18 @@ async function processSessionCredentials() {
                                 await fs.writeJSON(path.join(keysPath, `${keyName}.json`), keyData, { spaces: 2 });
                             }
                         }
-                        logger.info('âœ… Session credentials and keys processed');
+                        logger.info('✅ Session credentials and keys processed');
                     } else {
-                        logger.info('âœ… Session credentials processed (keys will be generated)');
+                        logger.info('✅ Session credentials processed (keys will be generated)');
                     }
                 } else {
                     await fs.writeJSON(path.join(SESSION_PATH, 'creds.json'), sessionData, { spaces: 2 });
-                    logger.info('âœ… Session credentials processed (legacy format)');
+                    logger.info('✅ Session credentials processed (legacy format)');
                 }
                 return true;
             }
         } catch (error) {
-            logger.warn('âš ï¸ Invalid SESSION_ID format:', error.message);
+            logger.warn('⚠️ Invalid SESSION_ID format:', error.message);
         }
     }
 
@@ -177,19 +179,19 @@ async function processSessionCredentials() {
         try {
             const creds = await fs.readJSON(credsPath);
             if (creds && (creds.noiseKey || creds.signedIdentityKey)) {
-                logger.info('ðŸ“ Using existing session credentials');
+                logger.info('🔑 Using existing session credentials');
                 return true;
             } else {
-                logger.warn('ðŸ”„ Invalid creds.json found, will regenerate');
+                logger.warn('🔄 Invalid creds.json found, will regenerate');
                 await fs.remove(credsPath);
             }
         } catch (error) {
-            logger.warn('ðŸ”„ Corrupted creds.json found, will regenerate');
+            logger.warn('🔄 Corrupted creds.json found, will regenerate');
             await fs.remove(credsPath).catch(() => {});
         }
     }
 
-    logger.info('â„¹ï¸ No valid session found - will generate QR code for pairing');
+    logger.info('ℹ️ No valid session found - will generate QR code for pairing');
     return false;
 }
 
@@ -205,20 +207,20 @@ async function sendBotStatusUpdate(sock) {
         second: '2-digit'
     });
 
-    const statusMessage = `â•­â”€â”€â”€â”€â”€ã€Œ *${config.botName}* ã€â”€â”€â”€â”€â”€â•®
-â”‚ âœ… Status: Online & Active
-â”‚ ðŸ”¥ Version: ${constants.BOT_VERSION}
-â”‚ ðŸ• Started: ${startupTime}
-â”‚ ðŸŒ Mode: ${config.publicMode ? 'Public' : 'Private'}
-â”‚ ðŸ‘¨â€ðŸ’» Developer: Ilom
-â”‚ ðŸŽ¯ Prefix: ${config.prefix}
-â”‚ ðŸ“ Commands: ${await commandHandler.getCommandCount()}
-â”‚ ðŸ”Œ Plugins: ${getActiveCount()}
-â•°â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â•¯
+    const statusMessage = `╭──────「 *${config.botName}* 」──────╮
+│ ✅ Status: Online & Active
+│ 🔥 Version: ${constants.BOT_VERSION}
+│ 🕐 Started: ${startupTime}
+│ 🌐 Mode: ${config.publicMode ? 'Public' : 'Private'}
+│ 👨‍💻 Developer: Ilom
+│ 🎯 Prefix: ${config.prefix}
+│ 📝 Commands: ${await commandHandler.getCommandCount()}
+│ 🔌 Plugins: ${getActiveCount()}
+╰──────────────────────────╯
 
-ðŸš€ *${config.botName} is now operational!*
-ðŸ“– Type *${config.prefix}help* to view all commands
-ðŸ†˜ Type *${config.prefix}menu* for quick navigation`;
+🚀 *${config.botName} is now operational!*
+📖 Type *${config.prefix}help* to view all commands
+🆘 Type *${config.prefix}menu* for quick navigation`;
 
     for (const ownerNumber of config.ownerNumbers) {
         try {
@@ -246,7 +248,7 @@ async function setupEventHandlers(sock, saveCreds) {
         saveCreds();
     });
 
-    logger.info('âœ… Setting up messages.upsert event handler...');
+    logger.info('✅ Setting up messages.upsert event handler...');
     
     await messageHandler.initializeCommandHandler();
     
@@ -290,7 +292,7 @@ async function setupEventHandlers(sock, saveCreds) {
                     continue;
                 }
                 
-                logger.debug(`ðŸ“¬ MESSAGE RECEIVED | From: ${from.split('@')[0]} | FromMe: ${fromMe}`);
+                logger.debug(`📬 MESSAGE RECEIVED | From: ${from.split('@')[0]} | FromMe: ${fromMe}`);
                 
                 await messageHandler.handleIncomingMessage(sock, message);
                 
@@ -321,10 +323,10 @@ async function setupEventHandlers(sock, saveCreds) {
         }
     });
 
-    logger.info('âœ… Setting up group-participants.update event handler...');
+    logger.info('✅ Setting up group-participants.update event handler...');
     sock.ev.on('group-participants.update', async (groupUpdate) => {
         try {
-            logger.info(`ðŸ”” GROUP EVENT | Group: ${groupUpdate.id} | Action: ${groupUpdate.action} | Participants: ${groupUpdate.participants?.length || 0}`);
+            logger.info(`🔔 GROUP EVENT | Group: ${groupUpdate.id} | Action: ${groupUpdate.action} | Participants: ${groupUpdate.participants?.length || 0}`);
             
             await groupHandler.handleParticipantsUpdate(sock, groupUpdate);
         } catch (error) {
@@ -332,10 +334,10 @@ async function setupEventHandlers(sock, saveCreds) {
         }
     });
 
-    logger.info('âœ… Setting up groups.update event handler...');
+    logger.info('✅ Setting up groups.update event handler...');
     sock.ev.on('groups.update', async (groupsUpdate) => {
         try {
-            logger.info(`ðŸ”” GROUPS UPDATE | Count: ${groupsUpdate.length}`);
+            logger.info(`🔔 GROUPS UPDATE | Count: ${groupsUpdate.length}`);
             
             await groupHandler.handleGroupUpdate(sock, groupsUpdate);
         } catch (error) {
@@ -358,19 +360,19 @@ async function setupEventHandlers(sock, saveCreds) {
     });
     
     setInterval(() => {
-        if (sock && sock.user) {
+        if (sock && sock.user && !isShuttingDown) {
             sock.sendPresenceUpdate('available').catch(() => {});
         }
     }, 60000);
     
-    logger.info('âœ… All event handlers registered successfully');
-    logger.info(`ðŸ“‹ Message Handler Status: ${messageHandler.isReady ? 'READY âœ…' : 'NOT READY âŒ'}`);
+    logger.info('✅ All event handlers registered successfully');
+    logger.info(`📋 Message Handler Status: ${messageHandler.isReady ? 'READY ✅' : 'NOT READY ❌'}`);
 }
 
 async function establishWhatsAppConnection() {
     return new Promise(async (resolve, reject) => {
         try {
-            logger.info('ðŸ“¡ Initializing WhatsApp connection...');
+            logger.info('📡 Initializing WhatsApp connection...');
             
             const originalLog = console.log;
             const originalClear = console.clear;
@@ -386,14 +388,14 @@ async function establishWhatsAppConnection() {
             console.clear = originalClear;
             process.stdout.write = originalWrite;
 
-            logger.info('ðŸ”‘ Loading authentication state...');
+            logger.info('🔐 Loading authentication state...');
             const { state, saveCreds } = await useMultiFileAuthState(SESSION_PATH);
 
-            logger.info('ðŸ“¦ Fetching latest Baileys version...');
+            logger.info('📦 Fetching latest Baileys version...');
             const { version } = await fetchLatestBaileysVersion();
-            logger.info(`âœ… Baileys version: ${version.join('.')}`);
+            logger.info(`✅ Baileys version: ${version.join('.')}`);
 
-            logger.info('ðŸ”Œ Creating WhatsApp socket...');
+            logger.info('🔌 Creating WhatsApp socket...');
             sock = makeWASocket({
                 auth: {
                     creds: state.creds,
@@ -404,7 +406,7 @@ async function establishWhatsAppConnection() {
                 markOnlineOnConnect: config.autoOnline,
                 syncFullHistory: false,
                 defaultQueryTimeoutMs: undefined,
-                connectTimeoutMs: 60000,
+                connectTimeoutMs: 120000,
                 keepAliveIntervalMs: 30000,
                 emitOwnEvents: true,
                 fireInitQueries: true,
@@ -416,38 +418,42 @@ async function establishWhatsAppConnection() {
                 }
             });
 
-            logger.info('ðŸ“¢ Setting up connection event handlers...');
+            logger.info('📢 Setting up connection event handlers...');
 
-            const connectionTimeout = setTimeout(async () => {
-                logger.warn('âš ï¸  Connection timeout - WhatsApp connection took too long');
-                if (sock && sock.end) {
-                    await sock.end();
+            if (connectionTimeout) {
+                clearTimeout(connectionTimeout);
+            }
+
+            connectionTimeout = setTimeout(async () => {
+                if (!sock?.user) {
+                    logger.warn('⚠️ Connection timeout - WhatsApp connection took too long');
+                    if (reconnectAttempts < MAX_RECONNECT) {
+                        reconnectAttempts++;
+                        logger.info(`🔄 Reconnect attempt ${reconnectAttempts}/${MAX_RECONNECT}`);
+                        setTimeout(() => establishWhatsAppConnection().then(resolve).catch(reject), 5000);
+                    } else {
+                        reject(new Error('Connection timeout after multiple attempts'));
+                    }
                 }
-                if (reconnectAttempts < MAX_RECONNECT) {
-                    reconnectAttempts++;
-                    setTimeout(() => establishWhatsAppConnection().then(resolve).catch(reject), 5000);
-                } else {
-                    reject(new Error('Connection timeout after multiple attempts'));
-                }
-            }, 60000);
+            }, 120000);
 
             sock.ev.on('connection.update', async (update) => {
                 const { connection, lastDisconnect, qr } = update;
                 
                 if (qr) {
-                    console.log(chalk.cyan('\nðŸ“± QR Code received - scan with WhatsApp to connect'));
-                    logger.info('ðŸ“± QR Code generated - Scan with WhatsApp');
+                    console.log(chalk.cyan('\n📱 QR Code received - scan with WhatsApp to connect'));
+                    logger.info('📱 QR Code generated - Scan with WhatsApp');
                     
                     if (qrService.isQREnabled()) {
                         try {
                             const qrGenerated = await qrService.generateQR(qr);
                             if (qrGenerated) {
-                                console.log(chalk.green('âœ… QR code generated and saved'));
+                                console.log(chalk.green('✅ QR code generated and saved'));
                                 const domain = process.env.REPLIT_DOMAINS || process.env.REPL_SLUG;
                                 if (domain) {
-                                    console.log(chalk.blue(`ðŸŒ Access QR code at: https://${domain}/qr`));
+                                    console.log(chalk.blue(`🌐 Access QR code at: https://${domain}/qr`));
                                 } else {
-                                    console.log(chalk.blue(`ðŸŒ Access QR code at: http://localhost:${config.server.port}/qr`));
+                                    console.log(chalk.blue(`🌐 Access QR code at: http://localhost:${config.server.port}/qr`));
                                 }
                             }
                         } catch (error) {
@@ -457,10 +463,13 @@ async function establishWhatsAppConnection() {
                 }
                 
                 if (connection === 'open') {
-                    clearTimeout(connectionTimeout);
+                    if (connectionTimeout) {
+                        clearTimeout(connectionTimeout);
+                        connectionTimeout = null;
+                    }
                     reconnectAttempts = 0;
-                    logger.info('âœ… WhatsApp connection established successfully!');
-                    console.log(chalk.green.bold('ðŸš€ Bot is online and ready!'));
+                    logger.info('✅ WhatsApp connection established successfully!');
+                    console.log(chalk.green.bold('🚀 Bot is online and ready!'));
                     
                     if (qrService.isQREnabled()) {
                         await qrService.clearQR();
@@ -470,52 +479,81 @@ async function establishWhatsAppConnection() {
                     
                     global.sock = sock;
                     
-                    logger.info('ðŸŽ¯ Bot is now listening for messages...');
-                    console.log(chalk.yellow('ðŸ“¨ Waiting for messages...'));
+                    logger.info('🎯 Bot is now listening for messages...');
+                    console.log(chalk.yellow('📨 Waiting for messages...'));
                     
                     await sendBotStatusUpdate(sock);
                     
-                    resolve();
+                    resolve(sock);
                 }
                 
                 if (connection === 'close') {
-                    clearTimeout(connectionTimeout);
+                    if (connectionTimeout) {
+                        clearTimeout(connectionTimeout);
+                        connectionTimeout = null;
+                    }
+
+                    if (isShuttingDown) {
+                        logger.info('🛑 Shutdown in progress, skipping reconnection');
+                        return resolve(null);
+                    }
+
                     const statusCode = lastDisconnect?.error?.output?.statusCode;
                     
-                    logger.warn(`âš ï¸  Connection closed. Status code: ${statusCode}`);
+                    logger.warn(`⚠️ Connection closed. Status code: ${statusCode}`);
                     
                     if (statusCode === DisconnectReason.badSession) {
-                        logger.error('âŒ Bad Session File, Please delete session and rescan');
+                        logger.error('❌ Bad Session File, Please delete session and rescan');
                         setTimeout(() => process.exit(1), 2000);
                     } else if (statusCode === DisconnectReason.connectionClosed) {
-                        logger.warn('âš ï¸  Connection closed, reconnecting...');
-                        setTimeout(() => establishWhatsAppConnection().then(resolve).catch(reject), 3000);
+                        logger.warn('⚠️ Connection closed, reconnecting...');
+                        if (reconnectAttempts < MAX_RECONNECT) {
+                            reconnectAttempts++;
+                            setTimeout(() => establishWhatsAppConnection().then(resolve).catch(reject), 5000);
+                        } else {
+                            reject(new Error('Max reconnection attempts reached'));
+                        }
                     } else if (statusCode === DisconnectReason.connectionLost) {
-                        logger.warn('âš ï¸  Connection lost, reconnecting...');
-                        setTimeout(() => establishWhatsAppConnection().then(resolve).catch(reject), 3000);
+                        logger.warn('⚠️ Connection lost, reconnecting...');
+                        if (reconnectAttempts < MAX_RECONNECT) {
+                            reconnectAttempts++;
+                            setTimeout(() => establishWhatsAppConnection().then(resolve).catch(reject), 5000);
+                        } else {
+                            reject(new Error('Max reconnection attempts reached'));
+                        }
                     } else if (statusCode === DisconnectReason.connectionReplaced) {
-                        logger.error('âŒ Connection replaced - Another session opened');
+                        logger.error('❌ Connection replaced - Another session opened');
                         setTimeout(() => process.exit(1), 2000);
                     } else if (statusCode === DisconnectReason.loggedOut) {
-                        logger.error('âŒ WhatsApp session logged out - Please update SESSION_ID');
+                        logger.error('❌ WhatsApp session logged out - Please update SESSION_ID');
                         await fs.remove(SESSION_PATH).catch(() => {});
                         await fs.ensureDir(SESSION_PATH);
                         await fs.ensureDir(path.join(SESSION_PATH, 'keys'));
                         setTimeout(() => process.exit(1), 2000);
                     } else if (statusCode === DisconnectReason.restartRequired) {
-                        logger.warn('âš ï¸  Restart required, restarting...');
+                        logger.warn('⚠️ Restart required, restarting...');
                         setTimeout(() => establishWhatsAppConnection().then(resolve).catch(reject), 2000);
                     } else if (statusCode === DisconnectReason.timedOut) {
-                        logger.warn('âš ï¸  Connection timed out, reconnecting...');
-                        setTimeout(() => establishWhatsAppConnection().then(resolve).catch(reject), 3000);
+                        logger.warn('⚠️ Connection timed out, reconnecting...');
+                        if (reconnectAttempts < MAX_RECONNECT) {
+                            reconnectAttempts++;
+                            setTimeout(() => establishWhatsAppConnection().then(resolve).catch(reject), 5000);
+                        } else {
+                            reject(new Error('Max reconnection attempts reached'));
+                        }
                     } else {
-                        logger.warn('âš ï¸  Unknown disconnection, reconnecting...');
-                        setTimeout(() => establishWhatsAppConnection().then(resolve).catch(reject), 5000);
+                        logger.warn('⚠️ Unknown disconnection, reconnecting...');
+                        if (reconnectAttempts < MAX_RECONNECT) {
+                            reconnectAttempts++;
+                            setTimeout(() => establishWhatsAppConnection().then(resolve).catch(reject), 5000);
+                        } else {
+                            reject(new Error('Max reconnection attempts reached'));
+                        }
                     }
                 }
                 
                 if (update.receivedPendingNotifications) {
-                    logger.info('ðŸ“¬ Received pending notifications');
+                    logger.info('📬 Received pending notifications');
                 }
             });
 
@@ -523,6 +561,10 @@ async function establishWhatsAppConnection() {
 
         } catch (error) {
             logger.error('Failed to establish WhatsApp connection:', error);
+            if (connectionTimeout) {
+                clearTimeout(connectionTimeout);
+                connectionTimeout = null;
+            }
             if (reconnectAttempts < MAX_RECONNECT) {
                 reconnectAttempts++;
                 setTimeout(() => establishWhatsAppConnection().then(resolve).catch(reject), 5000);
@@ -552,6 +594,10 @@ function setupProcessHandlers() {
 
     process.on('SIGINT', async () => {
         logger.info('Received SIGINT - Graceful shutdown initiated');
+        isShuttingDown = true;
+        if (connectionTimeout) {
+            clearTimeout(connectionTimeout);
+        }
         if (sock) {
             try {
                 await sock.logout();
@@ -564,6 +610,10 @@ function setupProcessHandlers() {
 
     process.on('SIGTERM', async () => {
         logger.info('Received SIGTERM - Graceful shutdown initiated');
+        isShuttingDown = true;
+        if (connectionTimeout) {
+            clearTimeout(connectionTimeout);
+        }
         if (sock) {
             try {
                 await sock.logout();
@@ -580,7 +630,7 @@ async function loadSavedSettings() {
         const mongoose = await import('mongoose');
         
         if (mongoose.default.connection.readyState !== 1) {
-            logger.info('â© Skipping settings load (database not connected)');
+            logger.info('⏩ Skipping settings load (database not connected)');
             return;
         }
 
@@ -588,7 +638,7 @@ async function loadSavedSettings() {
 
         if (prefixSetting && prefixSetting.value) {
             config.prefix = prefixSetting.value;
-            logger.info(`âœ… Loaded saved prefix: ${config.prefix}`);
+            logger.info(`✅ Loaded saved prefix: ${config.prefix}`);
         }
     } catch (error) {
         logger.warn('Could not load saved settings:', error.message);
@@ -599,12 +649,12 @@ async function initializeBot() {
     try {
         await displayStartupBanner();
         
-        console.log(chalk.cyan('\nâš™ï¸  Configuration Status:'));
-        console.log(chalk.gray(`   â”œâ”€ Public Mode: ${chalk.bold(config.publicMode ? chalk.green('âœ“ ENABLED') : chalk.red('âœ— DISABLED'))}`));
-        console.log(chalk.gray(`   â”œâ”€ Command Prefix: ${chalk.bold(chalk.yellow(config.prefix))}`));
-        console.log(chalk.gray(`   â”œâ”€ Owner Numbers: ${chalk.bold(chalk.cyan(config.ownerNumbers.length + ' configured'))}`));
-        console.log(chalk.gray(`   â”œâ”€ Database: ${chalk.bold(config.database.enabled ? chalk.green('âœ“ ENABLED') : chalk.red('âœ— DISABLED'))}`));
-        console.log(chalk.gray(`   â””â”€ Session ID: ${chalk.bold(process.env.SESSION_ID ? chalk.green('âœ“ Present') : chalk.yellow('âš  Missing (will generate QR)'))}\n`));
+        console.log(chalk.cyan('\n⚙️ Configuration Status:'));
+        console.log(chalk.gray(`   ├─ Public Mode: ${chalk.bold(config.publicMode ? chalk.green('✓ ENABLED') : chalk.red('✗ DISABLED'))}`));
+        console.log(chalk.gray(`   ├─ Command Prefix: ${chalk.bold(chalk.yellow(config.prefix))}`));
+        console.log(chalk.gray(`   ├─ Owner Numbers: ${chalk.bold(chalk.cyan(config.ownerNumbers.length + ' configured'))}`));
+        console.log(chalk.gray(`   ├─ Database: ${chalk.bold(config.database.enabled ? chalk.green('✓ ENABLED') : chalk.red('✗ DISABLED'))}`));
+        console.log(chalk.gray(`   ╰─ Session ID: ${chalk.bold(process.env.SESSION_ID ? chalk.green('✓ Present') : chalk.yellow('⚠ Missing (will generate QR)'))}\n`));
 
         logger.info('Creating project directory structure...');
         await createDirectoryStructure();
@@ -623,7 +673,7 @@ async function initializeBot() {
 
         logger.info('Initializing command handler...');
         await commandHandler.initialize();
-        logger.info(`âœ… Command handler ready with ${commandHandler.getCommandCount()} commands`);
+        logger.info(`✅ Command handler ready with ${commandHandler.getCommandCount()} commands`);
 
         logger.info('Loading command modules...');
         await commandHandler.loadCommands();
@@ -643,19 +693,19 @@ async function initializeBot() {
         setupProcessHandlers();
 
         logger.info('Bot initialization completed successfully');
-        console.log(chalk.magenta.bold('ðŸŽ‰ Ilom Bot is fully operational and ready to serve!'));
-        console.log(chalk.yellow.bold('\nðŸ“¨ Bot is now listening for incoming messages...'));
-        console.log(chalk.cyan(`ðŸ’¬ Send a message with prefix "${config.prefix}" to test (e.g., ${config.prefix}ping)\n`));
+        console.log(chalk.magenta.bold('🎉 Ilom Bot is fully operational and ready to serve!'));
+        console.log(chalk.yellow.bold('\n📨 Bot is now listening for incoming messages...'));
+        console.log(chalk.cyan(`💬 Send a message with prefix "${config.prefix}" to test (e.g., ${config.prefix}ping)\n`));
 
     } catch (error) {
         logger.error('Bot initialization failed:', error);
-        console.log(chalk.red.bold('âŒ Initialization failed - Check logs for details'));
+        console.log(chalk.red.bold('❌ Initialization failed - Check logs for details'));
         process.exit(1);
     }
 }
 
 initializeBot().then(() => {
-    logger.info('âœ¨ Bot is now running continuously...');
+    logger.info('✨ Bot is now running continuously...');
     return new Promise(() => {});
 }).catch(error => {
     logger.error('Fatal error:', error);
