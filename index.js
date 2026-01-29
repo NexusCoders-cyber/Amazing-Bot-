@@ -360,6 +360,15 @@ async function setupEventHandlers(sock, saveCreds) {
     logger.info('✅ All event handlers registered successfully');
     logger.info(`📋 Message Handler Status: ${messageHandler.isReady ? 'READY ✅' : 'NOT READY ❌'}`);
 }
+setInterval(() => {
+        if (sock && sock.user) {
+            sock.sendPresenceUpdate('available').catch(() => {});
+        }
+    }, 60000);
+    
+    logger.info('✅ All event handlers registered successfully');
+    logger.info(`📋 Message Handler Status: ${messageHandler.isReady ? 'READY ✅' : 'NOT READY ❌'}`);
+}
 async function establishWhatsAppConnection() {
     return new Promise(async (resolve, reject) => {
         try {
