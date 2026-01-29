@@ -393,12 +393,15 @@ async function establishWhatsAppConnection() {
                     keys: makeCacheableSignalKeyStore(state.keys, P({ level: "fatal" }).child({ level: "fatal" })),
                 },
                 printQRInTerminal: true,
-                browser: Browsers.macOS("Safari"),
-                markOnlineOnConnect: true,
-                defaultQueryTimeoutMs: 60000,
+                browser: Browsers.ubuntu("Chrome"),
+                markOnlineOnConnect: config.autoOnline,
+                syncFullHistory: false,
+                defaultQueryTimeoutMs: undefined,
                 connectTimeoutMs: 60000,
-                retryRequestDelayMs: 5000,
-                maxRetries: 5,
+                keepAliveIntervalMs: 30000,
+                emitOwnEvents: true,
+                fireInitQueries: true,
+                generateHighQualityLinkPreview: false,
                 logger: P({ level: "silent" }),
                 version,
                 getMessage: async (key) => {
@@ -475,22 +478,32 @@ async function establishWhatsAppConnection() {
                     logger.warn(`⚠️  Connection closed. Status code: ${statusCode}`);
                     
                     if (statusCode === DisconnectReason.badSession) {
-                        logger.error('❌ Bad Session File, deleting and restarting...');
-                        await fs.remove(SESSION_PATH).catch(() => {});
-                        await fs.ensureDir(SESSION_PATH);
-                        await fs.ensureDir(path.join(SESSION_PATH, 'keys'));
-                        reject(new Error('Bad session - Please restart'));
-                    } else if (statusCode === DisconnectReason.loggedOut) {
-                        logger.error('❌ WhatsApp session expired - Please update SESSION_ID');
-                        await fs.remove(SESSION_PATH).catch(() => {});
-                        await fs.ensureDir(SESSION_PATH);
-                        await fs.ensureDir(path.join(SESSION_PATH, 'keys'));
-                        reject(new Error('Logged out - Update SESSION_ID'));
+                        logger.error('❌ Bad Session File, Please delete session and rescan');
+                        setTimeout(() => process.exit(1), 2000);
+                    } else if (statusCode === DisconnectReason.connectionClosed) {
+                        logger.warn('⚠️  Connection closed, reconnecting...');
+                        setTimeout(() => establishWhatsAppConnection().then(resolve).catch(reject), 3000);
+                    } else if (statusCode === DisconnectReason.connectionLost) {
+                        logger.warn('⚠️  Connection lost, reconnecting...');
+                        setTimeout(() => establishWhatsAppConnection().then(resolve).catch(reject), 3000);
                     } else if (statusCode === DisconnectReason.connectionReplaced) {
                         logger.error('❌ Connection replaced - Another session opened');
-                        reject(new Error('Connection replaced'));
+                        setTimeout(() => process.exit(1), 2000);
+                    } else if (statusCode === DisconnectReason.loggedOut) {
+                        logger.error('❌ WhatsApp session logged out - Please update SESSION_ID');
+                        await fs.remove(SESSION_PATH).catch(() => {});
+                        await fs.ensureDir(SESSION_PATH);
+                        await fs.ensureDir(path.join(SESSION_PATH, 'keys'));
+                        setTimeout(() => process.exit(1), 2000);
+                    } else if (statusCode === DisconnectReason.restartRequired) {
+                        logger.warn('⚠️  Restart required, restarting...');
+                        setTimeout(() => establishWhatsAppConnection().then(resolve).catch(reject), 2000);
+                    } else if (statusCode === DisconnectReason.timedOut) {
+                        logger.warn('⚠️  Connection timed out, reconnecting...');
+                        setTimeout(() => establishWhatsAppConnection().then(resolve).catch(reject), 3000);
                     } else {
-                        logger.warn('⚠️  Connection closed, will reconnect...');
+                        logger.warn('⚠️  Unknown disconnection, reconnecting...');
+                        setTimeout(() => establishWhatsAppConnection().then(resolve).catch(reject), 5000);
                     }
                 }
                 
@@ -498,6 +511,8 @@ async function establishWhatsAppConnection() {
                     logger.info('📬 Received pending notifications');
                 }
             });
+
+            sock.ev.on('creds.update', saveCreds);
 
         } catch (error) {
             logger.error('Failed to establish WhatsApp connection:', error);
@@ -510,7 +525,6 @@ async function establishWhatsAppConnection() {
         }
     });
 }
-
 function setupProcessHandlers() {
     process.on('unhandledRejection', (reason, promise) => {
         logger.error('Unhandled Promise Rejection:', reason);
