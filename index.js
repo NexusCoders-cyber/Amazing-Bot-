@@ -98,33 +98,40 @@ async function processSessionCredentials() {
                     
                     const axios = (await import('axios')).default;
                     const response = await axios.get(`https://existing-madelle-lance-ui-efecfdce.koyeb.app/download/${sessdata}`, { 
-                        responseType: 'stream',
-                        timeout: 15000
+                        responseType: 'arraybuffer',
+                        timeout: 30000,
+                        headers: {
+                            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+                        }
                     });
                     
                     if (response.status === 404) {
-                        throw new Error(`File with identifier ${sessdata} not found.`);
+                        throw new Error(`Session file not found on server`);
                     }
                     
                     await fs.ensureDir(SESSION_PATH);
-                    const writer = fs.createWriteStream(path.join(SESSION_PATH, 'creds.json'));
-                    response.data.pipe(writer);
-
-                    await new Promise((resolve, reject) => {
-                        writer.on('finish', () => {
-                            logger.info('✅ Session credentials downloaded successfully!');
-                            resolve();
-                        });
-                        writer.on('error', (err) => {
-                            logger.error('❌ Failed to download session file:', err);
-                            reject(err);
-                        });
-                    });
+                    const credPath = path.join(SESSION_PATH, 'creds.json');
+                    await fs.writeFile(credPath, response.data);
+                    
+                    logger.info('✅ Session credentials downloaded and saved successfully!');
+                    
+                    try {
+                        const savedCreds = await fs.readJSON(credPath);
+                        if (!savedCreds.noiseKey || !savedCreds.signedIdentityKey) {
+                            throw new Error('Downloaded session file is missing required keys');
+                        }
+                        logger.info('✅ Session file validated successfully');
+                    } catch (validationError) {
+                        logger.error('Session validation failed:', validationError);
+                        await fs.remove(credPath);
+                        throw new Error('Invalid session file format');
+                    }
                     
                     return true;
                 } catch (error) {
                     logger.warn(`⚠️ Sypher session download failed: ${error.message}`);
                     logger.info('💡 Falling back to alternative session formats...');
+                    await fs.remove(path.join(SESSION_PATH, 'creds.json')).catch(() => {});
                 }
             }
 
@@ -170,6 +177,7 @@ async function processSessionCredentials() {
             }
         } catch (error) {
             logger.warn('⚠️ Invalid SESSION_ID format:', error.message);
+            await fs.remove(path.join(SESSION_PATH, 'creds.json')).catch(() => {});
         }
     }
 
@@ -244,8 +252,8 @@ async function sendBotStatusUpdate(sock) {
 }
 
 async function setupEventHandlers(sock, saveCreds) {
-    sock.ev.on('creds.update', () => {
-        saveCreds();
+    sock.ev.on('creds.update', async () => {
+        await saveCreds();
     });
 
     logger.info('✅ Setting up messages.upsert event handler...');
@@ -413,6 +421,10 @@ async function establishWhatsAppConnection() {
                 generateHighQualityLinkPreview: false,
                 logger: P({ level: "silent" }),
                 version,
+                shouldIgnoreJid: jid => {
+                    return jid === 'status@broadcast';
+                },
+                retryRequestDelayMs: 250,
                 getMessage: async (key) => {
                     return { conversation: '' };
                 }
@@ -503,7 +515,10 @@ async function establishWhatsAppConnection() {
                     logger.warn(`⚠️ Connection closed. Status code: ${statusCode}`);
                     
                     if (statusCode === DisconnectReason.badSession) {
-                        logger.error('❌ Bad Session File, Please delete session and rescan');
+                        logger.error('❌ Bad Session File, Please delete cache and rescan');
+                        await fs.remove(SESSION_PATH).catch(() => {});
+                        await fs.ensureDir(SESSION_PATH);
+                        await fs.ensureDir(path.join(SESSION_PATH, 'keys'));
                         setTimeout(() => process.exit(1), 2000);
                     } else if (statusCode === DisconnectReason.connectionClosed) {
                         logger.warn('⚠️ Connection closed, reconnecting...');
@@ -557,7 +572,9 @@ async function establishWhatsAppConnection() {
                 }
             });
 
-            sock.ev.on('creds.update', saveCreds);
+            sock.ev.on('creds.update', async () => {
+                await saveCreds();
+            });
 
         } catch (error) {
             logger.error('Failed to establish WhatsApp connection:', error);
