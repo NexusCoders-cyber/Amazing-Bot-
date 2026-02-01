@@ -291,12 +291,30 @@ async function setupEventHandlers(sock, saveCreds) {
                 }
 
                 const messageKeys = Object.keys(message.message);
-                const isProtocolOnly = messageKeys.length === 1 && (
-                    messageKeys.includes('protocolMessage') || 
-                    messageKeys.includes('senderKeyDistributionMessage')
+                const isProtocolOnly = messageKeys.every(key => 
+                    key === 'protocolMessage' || 
+                    key === 'senderKeyDistributionMessage' ||
+                    key === 'messageContextInfo'
                 );
 
                 if (isProtocolOnly) {
+                    continue;
+                }
+
+                const hasActualContent = messageKeys.some(key => 
+                    key === 'conversation' ||
+                    key === 'extendedTextMessage' ||
+                    key === 'imageMessage' ||
+                    key === 'videoMessage' ||
+                    key === 'audioMessage' ||
+                    key === 'documentMessage' ||
+                    key === 'stickerMessage' ||
+                    key === 'buttonsResponseMessage' ||
+                    key === 'listResponseMessage' ||
+                    key === 'templateButtonReplyMessage'
+                );
+
+                if (!hasActualContent) {
                     continue;
                 }
                 
