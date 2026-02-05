@@ -1,74 +1,129 @@
+import { exec } from 'child_process';
+import { promisify } from 'util';
+import font from '../../utils/font.js';
+
+const execAsync = promisify(exec);
+
+async function detectEnvironment() {
+    const hostname = process.env.HOSTNAME || '';
+    const pwd = process.cwd();
+
+    if (hostname.includes('bot-hosting') || pwd.includes('bot-hosting')) {
+        return 'panel';
+    }
+
+    if (process.env.CODESPACES === 'true') {
+        return 'codespaces';
+    }
+
+    try {
+        await execAsync('pm2 --version');
+        return 'vps-pm2';
+    } catch (e) {}
+
+    try {
+        await execAsync('systemctl --version');
+        return 'vps-systemd';
+    } catch (e) {}
+
+    return 'unknown';
+}
+
+async function shutdownBot(environment, sock, from) {
+    switch (environment) {
+        case 'panel':
+            await sock.sendMessage(from, {
+                text: `${font.sansBold('Shutdown Initiated')}\n\n${font.italic('Environment:')} Panel\n${font.italic('Action:')} Process exit\n\n${font.circled('!')} Panel will auto-restart\nTo keep offline, stop from panel`
+            });
+            setTimeout(() => process.exit(0), 2000);
+            break;
+
+        case 'vps-pm2':
+            try {
+                await sock.sendMessage(from, {
+                    text: `${font.sansBold('Shutdown Initiated')}\n\n${font.italic('Environment:')} VPS (PM2)\n${font.italic('Action:')} Stopping PM2 process\n\n${font.circled('✓')} Bot will stop`
+                });
+                setTimeout(async () => {
+                    await execAsync('pm2 stop all');
+                }, 2000);
+            } catch (e) {
+                await sock.sendMessage(from, {
+                    text: `${font.sansBold('Shutdown Failed')}\n\n${font.circled('✗')} PM2 stop failed\nForcing exit...`
+                });
+                setTimeout(() => process.exit(0), 2000);
+            }
+            break;
+
+        case 'vps-systemd':
+            await sock.sendMessage(from, {
+                text: `${font.sansBold('Shutdown Request')}\n\n${font.italic('Environment:')} VPS (systemd)\n\n${font.circled('!')} Manual action required\n\nRun: ${font.monospace('sudo systemctl stop <service>')}\n\nForcing process exit in 5s...`
+            });
+            setTimeout(() => process.exit(0), 5000);
+            break;
+
+        case 'codespaces':
+            await sock.sendMessage(from, {
+                text: `${font.sansBold('Shutdown Initiated')}\n\n${font.italic('Environment:')} GitHub Codespaces\n${font.italic('Action:')} Process exit\n\n${font.circled('✓')} Bot stopping`
+            });
+            setTimeout(() => process.exit(0), 2000);
+            break;
+
+        default:
+            await sock.sendMessage(from, {
+                text: `${font.sansBold('Shutdown Initiated')}\n\n${font.italic('Environment:')} Unknown\n${font.italic('Action:')} Force exit\n\n${font.circled('✓')} Bot shutting down`
+            });
+            setTimeout(() => process.exit(0), 2000);
+            break;
+    }
+}
+
 export default {
     name: 'shutdown',
-    aliases: ['stop', 'exit', 'kill'],
     category: 'owner',
-    description: 'Shutdown the bot gracefully (Owner Only)',
-    usage: 'shutdown [reason]',
-    cooldown: 0,
+    description: 'Shutdown the bot gracefully',
+    usage: 'shutdown',
+    example: 'shutdown',
+    cooldown: 5,
     permissions: ['owner'],
     ownerOnly: true,
+    args: false,
+    minArgs: 0,
 
-    async execute({ sock, message, args, from, sender, prefix }) {
-        try {
-            const reason = args.join(' ') || 'Manual shutdown by owner';
-            const uptime = process.uptime();
-            
-            // Calculate uptime
-            const days = Math.floor(uptime / 86400);
-            const hours = Math.floor((uptime % 86400) / 3600);
-            const minutes = Math.floor((uptime % 3600) / 60);
-            const uptimeString = `${days}d ${hours}h ${minutes}m`;
-            
-            // Get memory usage
-            const memoryUsage = process.memoryUsage();
-            const memoryMB = Math.round(memoryUsage.heapUsed / 1024 / 1024);
-            
-            await sock.sendMessage(from, {
-                text: `🛑 *Bot Shutdown Initiated*\n\n👤 **Initiated by:** Owner (${sender.split('@')[0]})\n📝 **Reason:** ${reason}\n⏰ **Final uptime:** ${uptimeString}\n💾 **Memory usage:** ${memoryMB} MB\n📊 **Status:** Preparing graceful shutdown...\n\n⚠️ **Notice:** Bot will go offline permanently\n🔄 **Restart required:** Manual intervention needed\n\n⏳ *Shutting down in 5 seconds...*`
-            });
-            
-            // Log shutdown event
-            console.log(`[SHUTDOWN] Bot shutdown initiated by ${sender} - Reason: ${reason}`);
-            console.log(`[SHUTDOWN] Final uptime: ${uptimeString}`);
-            console.log(`[SHUTDOWN] Memory usage: ${memoryMB} MB`);
-            
-            // Send final goodbye message
-            setTimeout(async () => {
-                try {
-                    await sock.sendMessage(from, {
-                        text: `👋 *Goodbye!*\n\n🤖 WhatsApp Bot is now shutting down...\n⏰ Final uptime: ${uptimeString}\n📊 Commands processed: Unknown\n🎯 Status: Offline\n\n*Thank you for using WhatsApp Bot!*\n*Manual restart required to come back online*\n\n💤 *Shutting down gracefully...*`
-                    });
-                } catch (msgError) {
-                    console.error('[SHUTDOWN] Failed to send goodbye message:', msgError);
-                }
-                
-                // Graceful shutdown sequence
-                setTimeout(() => {
-                    console.log('[SHUTDOWN] Performing graceful shutdown...');
-                    
-                    // Close database connections if any
-                    // await mongoose.disconnect();
-                    
-                    // Close other resources
-                    // sock.end(); // Close WhatsApp connection
-                    
-                    console.log('[SHUTDOWN] Graceful shutdown complete.');
-                    process.exit(0);
-                }, 2000);
-            }, 3000);
-            
-        } catch (error) {
-            console.error('Shutdown command error:', error);
-            
-            await sock.sendMessage(from, {
-                text: `❌ *Shutdown Failed*\n\n**Error:** ${error.message}\n\n**Critical Issue:** Unable to perform graceful shutdown\n\n**Emergency actions:**\n• Force kill process if needed\n• Check system resources\n• Review error logs\n• Contact system administrator\n\n⚠️ *System may require force termination*\n🔴 *Bot may remain in unstable state*`
-            });
-            
-            // Emergency shutdown if normal shutdown fails
-            setTimeout(() => {
-                console.error('[SHUTDOWN] Emergency shutdown due to error');
-                process.exit(1);
-            }, 5000);
+    async execute({ sock, message, args, from, sender }) {
+        await sock.sendMessage(from, {
+            react: { text: '⚠️', key: message.key }
+        });
+
+        const environment = await detectEnvironment();
+
+        await sock.sendMessage(from, {
+            text: `${font.bold('Shutdown Confirmation')}\n\n${font.italic('Detected:')} ${environment}\n\nShutting down in 3 seconds...\n\n${font.circled('!')} Send any message to cancel`
+        }, { quoted: message });
+
+        let cancelled = false;
+        const cancelTimeout = setTimeout(() => {
+            if (!cancelled) {
+                shutdownBot(environment, sock, from);
+            }
+        }, 3000);
+
+        const cleanup = () => {
+            clearTimeout(cancelTimeout);
+        };
+
+        if (!global.shutdownHandlers) {
+            global.shutdownHandlers = {};
         }
+
+        global.shutdownHandlers[sender] = {
+            cleanup,
+            created: Date.now()
+        };
+
+        setTimeout(() => {
+            if (global.shutdownHandlers[sender]) {
+                delete global.shutdownHandlers[sender];
+            }
+        }, 10000);
     }
 };
