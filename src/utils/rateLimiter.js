@@ -1,6 +1,6 @@
-const { cache } = require('./cache');
-const logger = require('./logger');
-const config = require('../config');
+import { cache } from './cache.js';
+import logger from './logger.js';
+import config from '../config.js';
 
 class RateLimiter {
     constructor() {
@@ -202,7 +202,7 @@ class RateLimiter {
 
 const rateLimiter = new RateLimiter();
 
-module.exports = {
+export default {
     rateLimiter,
     checkLimit: (userId, type, customLimit) => rateLimiter.checkLimit(userId, type, customLimit),
     isTemporaryBanned: (userId) => rateLimiter.isTemporaryBanned(userId),

@@ -1,6 +1,11 @@
-const fs = require('fs-extra');
-const path = require('path');
-const logger = require('./logger');
+import fs from 'fs-extra';
+import path from 'path';
+import { fileURLToPath } from 'url';
+import { dirname } from 'path';
+import logger from './logger.js';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 
 class PluginManager {
     constructor() {
@@ -69,13 +74,11 @@ class PluginManager {
     }
 }
 
-const pluginManager = new PluginManager();
+export const pluginManager = new PluginManager();
 
-module.exports = {
-    pluginManager,
-    loadPlugins: () => {
-        logger.info('Plugin system initialized');
-        return Promise.resolve();
-    },
-    getActiveCount: () => pluginManager.activePlugins.size
+export const loadPlugins = () => {
+    logger.info('Plugin system initialized');
+    return Promise.resolve();
 };
+
+export const getActiveCount = () => pluginManager.activePlugins.size;

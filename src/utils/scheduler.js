@@ -1,8 +1,8 @@
-const cron = require('node-cron');
-const EventEmitter = require('events');
-const logger = require('./logger');
-const { cache } = require('./cache');
-const config = require('../config');
+import cron from 'node-cron';
+import EventEmitter from 'events';
+import logger from './logger.js';
+import { cache } from './cache.js';
+import config from '../config.js';
 
 class TaskScheduler extends EventEmitter {
     constructor() {
@@ -45,7 +45,7 @@ class TaskScheduler extends EventEmitter {
                 description: 'Clean up old database records',
                 enabled: true,
                 task: async () => {
-                    const { cleanup } = require('./database');
+                    const { cleanup } = await import('./database.js');
                     await cleanup();
                     logger.info('Database cleanup completed');
                 }
@@ -76,7 +76,7 @@ class TaskScheduler extends EventEmitter {
                 description: 'Create database backup',
                 enabled: config.backup.enabled,
                 task: async () => {
-                    const { backup } = require('./database');
+                    const { backup } = await import('./database.js');
                     const backupFile = await backup();
                     logger.info(`Database backup created: ${backupFile}`);
                 }
@@ -384,8 +384,8 @@ class TaskScheduler extends EventEmitter {
 
     async updateUserStats() {
         try {
-            const { getUserStats } = require('../models/User');
-            const { getGroupStats } = require('../models/Group');
+            const { getUserStats } = await import('../models/User.js');
+            const { getGroupStats } = await import('../models/Group.js');
             
             const userStats = await getUserStats();
             const groupStats = await getGroupStats();
@@ -401,7 +401,7 @@ class TaskScheduler extends EventEmitter {
 
     async checkPremiumExpiry() {
         try {
-            const { User } = require('../models/User');
+            const { User } = await import('../models/User.js');
             const expiredUsers = await User.find({
                 isPremium: true,
                 premiumUntil: { $lte: new Date() }
@@ -532,22 +532,19 @@ _Automated daily report_`;
     }
 }
 
-const taskScheduler = new TaskScheduler();
+export const taskScheduler = new TaskScheduler();
 
-module.exports = {
-    taskScheduler,
-    startScheduler: () => taskScheduler.startScheduler(),
-    addTask: (taskData) => taskScheduler.addTask(taskData),
-    removeTask: (name) => taskScheduler.removeTask(name),
-    enableTask: (name) => taskScheduler.enableTask(name),
-    disableTask: (name) => taskScheduler.disableTask(name),
-    executeTask: (name, force) => taskScheduler.executeTask(name, force),
-    getTask: (name) => taskScheduler.getTask(name),
-    getAllTasks: () => taskScheduler.getAllTasks(),
-    getActiveTasks: () => taskScheduler.getActiveTasks(),
-    getTaskHistory: (limit) => taskScheduler.getTaskHistory(limit),
-    getTaskStats: () => taskScheduler.getTaskStats(),
-    scheduleOneTime: (name, delay, task) => taskScheduler.scheduleOneTime(name, delay, task),
-    generateTaskList: () => taskScheduler.generateTaskList(),
-    stopScheduler: () => taskScheduler.stopScheduler()
-};
+export const startScheduler = () => taskScheduler.startScheduler();
+export const addTask = (taskData) => taskScheduler.addTask(taskData);
+export const removeTask = (name) => taskScheduler.removeTask(name);
+export const enableTask = (name) => taskScheduler.enableTask(name);
+export const disableTask = (name) => taskScheduler.disableTask(name);
+export const executeTask = (name, force) => taskScheduler.executeTask(name, force);
+export const getTask = (name) => taskScheduler.getTask(name);
+export const getAllTasks = () => taskScheduler.getAllTasks();
+export const getActiveTasks = () => taskScheduler.getActiveTasks();
+export const getTaskHistory = (limit) => taskScheduler.getTaskHistory(limit);
+export const getTaskStats = () => taskScheduler.getTaskStats();
+export const scheduleOneTime = (name, delay, task) => taskScheduler.scheduleOneTime(name, delay, task);
+export const generateTaskList = () => taskScheduler.generateTaskList();
+export const stopScheduler = () => taskScheduler.stopScheduler();

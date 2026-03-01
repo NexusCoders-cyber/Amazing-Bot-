@@ -1,407 +1,417 @@
-const { downloadMediaMessage } = require('@whiskeysockets/baileys');
-const { commandHandler } = require('./commandHandler');
-const config = require('../config');
-const logger = require('../utils/logger');
-const { getUser, createUser, updateUser } = require('../models/User');
-const { getGroup, createGroup, updateGroup } = require('../models/Group');
-const { createMessage } = require('../models/Message');
-const mediaHandler = require('./mediaHandler');
-const antiSpam = require('../utils/antiSpam');
-const cache = require('../utils/cache');
-const fs = require('fs-extra');
-const path = require('path');
+import config from '../config.js';
+import logger from '../utils/logger.js';
+import { cache } from '../utils/cache.js';
+import { checkAntilink } from '../commands/admin/antilink.js';
+import { checkBan } from '../commands/admin/ban.js';
+import { checkSpam } from '../commands/admin/antispam.js';
+import { checkBadWord } from '../commands/admin/antiword.js';
+
+let autoDownloadHandler = null;
+
+async function getAutoDownload() {
+    if (!autoDownloadHandler) {
+        try {
+            const mod = await import('../commands/media/autolink.js');
+            autoDownloadHandler = mod.handleAutoDownload;
+        } catch {
+            autoDownloadHandler = async () => false;
+        }
+    }
+    return autoDownloadHandler;
+}
+
+function resolveStanzaId(message) {
+    const m = message.message;
+    if (!m) return null;
+    return m.extendedTextMessage?.contextInfo?.stanzaId
+        || m.imageMessage?.contextInfo?.stanzaId
+        || m.videoMessage?.contextInfo?.stanzaId
+        || m.audioMessage?.contextInfo?.stanzaId
+        || m.documentMessage?.contextInfo?.stanzaId
+        || m.stickerMessage?.contextInfo?.stanzaId
+        || m.ephemeralMessage?.message?.extendedTextMessage?.contextInfo?.stanzaId
+        || null;
+}
+
+function normNum(jid) {
+    return String(jid || '').replace(/@s\.whatsapp\.net|@c\.us|@g\.us|@broadcast|@lid/g, '').split(':')[0].replace(/[^0-9]/g, '');
+}
+
+function findReplyHandler(stanzaId) {
+    if (!global.replyHandlers || !stanzaId) return null;
+    return global.replyHandlers[stanzaId]
+        || global.replyHandlers[stanzaId.toLowerCase()]
+        || global.replyHandlers[stanzaId.toUpperCase()]
+        || null;
+}
+
+function findChatHandler(chatJid) {
+    if (!global.chatHandlers || !chatJid) return null;
+    return global.chatHandlers[chatJid] || null;
+}
+
+export function registerChatHandler(chatJid, handler, ttlMs = 10 * 60 * 1000) {
+    if (!global.chatHandlers) global.chatHandlers = {};
+    global.chatHandlers[chatJid] = { command: handler.command || 'unknown', handler: handler.handler };
+    if (ttlMs > 0) {
+        setTimeout(() => {
+            if (global.chatHandlers?.[chatJid]?.handler === handler.handler) {
+                delete global.chatHandlers[chatJid];
+            }
+        }, ttlMs);
+    }
+}
+
+export function clearChatHandler(chatJid) {
+    if (global.chatHandlers?.[chatJid]) delete global.chatHandlers[chatJid];
+}
 
 class MessageHandler {
     constructor() {
-        this.messageQueue = [];
-        this.processing = false;
-        this.autoReplyEnabled = true;
-        this.chatBotEnabled = true;
+        this.commandHandler = null;
+        this.isReady = false;
+        this.typingIntervals = new Map();
+        this.recordingIntervals = new Map();
+        this.spamTracker = new Map();
+        this.spamCleanupInterval = setInterval(() => this.cleanupSpamTracker(), 60000);
+    }
+
+    cleanupSpamTracker() {
+        const now = Date.now();
+        for (const [key, data] of this.spamTracker.entries()) {
+            if (now - data.windowStart > 60000) this.spamTracker.delete(key);
+        }
+    }
+
+    isSpamming(sender) {
+        if (!config.antiSpam?.enabled) return false;
+        const maxMessages = config.antiSpam?.maxMessages || 10;
+        const windowMs = config.antiSpam?.windowMs || 10000;
+        const now = Date.now();
+        if (!this.spamTracker.has(sender)) {
+            this.spamTracker.set(sender, { count: 1, windowStart: now });
+            return false;
+        }
+        const data = this.spamTracker.get(sender);
+        if (now - data.windowStart > windowMs) {
+            data.count = 1;
+            data.windowStart = now;
+            return false;
+        }
+        data.count++;
+        return data.count > maxMessages;
+    }
+
+    async initializeCommandHandler() {
+        if (this.commandHandler && this.isReady) return this.commandHandler;
+        try {
+            const mod = await import('./commandHandler.js');
+            this.commandHandler = mod.commandHandler;
+            if (!this.commandHandler.isInitialized) {
+                await this.commandHandler.initialize();
+            }
+            this.isReady = true;
+            return this.commandHandler;
+        } catch (error) {
+            logger.error('Failed to initialize command handler:', error);
+            throw error;
+        }
+    }
+
+    extractText(message) {
+        if (!message?.message) return '';
+        const msg = message.message;
+        return msg.conversation
+            || msg.extendedTextMessage?.text
+            || msg.imageMessage?.caption
+            || msg.videoMessage?.caption
+            || msg.documentMessage?.caption
+            || msg.audioMessage?.caption
+            || msg.stickerMessage?.caption
+            || msg.viewOnceMessage?.message?.imageMessage?.caption
+            || msg.viewOnceMessage?.message?.videoMessage?.caption
+            || msg.ephemeralMessage?.message?.conversation
+            || msg.ephemeralMessage?.message?.extendedTextMessage?.text
+            || msg.buttonsResponseMessage?.selectedButtonId
+            || msg.listResponseMessage?.singleSelectReply?.selectedRowId
+            || msg.templateButtonReplyMessage?.selectedId
+            || '';
     }
 
     extractMessageContent(message) {
-        const content = message.message;
-        if (!content) return null;
-
+        if (!message?.message) return null;
+        const msg = message.message;
         let text = '';
         let messageType = 'text';
         let media = null;
-        let quoted = null;
-
-        if (content.conversation) {
-            text = content.conversation;
-        } else if (content.extendedTextMessage) {
-            text = content.extendedTextMessage.text;
-            quoted = content.extendedTextMessage.contextInfo?.quotedMessage;
-        } else if (content.imageMessage) {
-            text = content.imageMessage.caption || '';
-            messageType = 'image';
-            media = content.imageMessage;
-        } else if (content.videoMessage) {
-            text = content.videoMessage.caption || '';
-            messageType = 'video';
-            media = content.videoMessage;
-        } else if (content.audioMessage) {
-            messageType = 'audio';
-            media = content.audioMessage;
-        } else if (content.documentMessage) {
-            text = content.documentMessage.caption || '';
-            messageType = 'document';
-            media = content.documentMessage;
-        } else if (content.stickerMessage) {
-            messageType = 'sticker';
-            media = content.stickerMessage;
-        } else if (content.contactMessage) {
-            messageType = 'contact';
-            text = content.contactMessage.displayName || '';
-        } else if (content.locationMessage) {
-            messageType = 'location';
-            text = content.locationMessage.name || 'Location';
-        } else if (content.liveLocationMessage) {
-            messageType = 'liveLocation';
-            text = content.liveLocationMessage.caption || 'Live Location';
-        } else if (content.pollCreationMessage) {
-            messageType = 'poll';
-            text = content.pollCreationMessage.name;
-        } else if (content.buttonsResponseMessage) {
-            text = content.buttonsResponseMessage.selectedButtonId;
-            messageType = 'buttonResponse';
-        } else if (content.listResponseMessage) {
-            text = content.listResponseMessage.singleSelectReply.selectedRowId;
-            messageType = 'listResponse';
-        }
-
-        return { text: text.trim(), messageType, media, quoted };
-    }
-
-    async downloadMedia(message, media) {
         try {
-            const buffer = await downloadMediaMessage(message, 'buffer', {});
-            const mediaType = media.mimetype?.split('/')[0] || 'unknown';
-            const extension = media.mimetype?.split('/')[1] || 'bin';
-            
-            const fileName = `${Date.now()}_${Math.random().toString(36).substring(7)}.${extension}`;
-            const tempDir = path.join(process.cwd(), 'temp', mediaType);
-            await fs.ensureDir(tempDir);
-            
-            const filePath = path.join(tempDir, fileName);
-            await fs.writeFile(filePath, buffer);
-            
-            return {
-                buffer,
-                filePath,
-                fileName,
-                mimetype: media.mimetype,
-                size: buffer.length
-            };
+            if (msg.conversation) {
+                text = msg.conversation;
+            } else if (msg.extendedTextMessage) {
+                text = msg.extendedTextMessage.text || '';
+            } else if (msg.imageMessage) {
+                text = msg.imageMessage.caption || '';
+                messageType = 'image';
+                media = msg.imageMessage;
+            } else if (msg.videoMessage) {
+                text = msg.videoMessage.caption || '';
+                messageType = 'video';
+                media = msg.videoMessage;
+            } else if (msg.audioMessage) {
+                messageType = 'audio';
+                media = msg.audioMessage;
+            } else if (msg.documentMessage) {
+                text = msg.documentMessage.caption || '';
+                messageType = 'document';
+                media = msg.documentMessage;
+            } else if (msg.stickerMessage) {
+                messageType = 'sticker';
+                media = msg.stickerMessage;
+            } else if (msg.buttonsResponseMessage) {
+                text = msg.buttonsResponseMessage.selectedButtonId || '';
+            } else if (msg.listResponseMessage) {
+                text = msg.listResponseMessage.singleSelectReply?.selectedRowId || '';
+            } else if (msg.viewOnceMessage) {
+                const inner = msg.viewOnceMessage.message;
+                text = inner?.imageMessage?.caption || inner?.videoMessage?.caption || '';
+                messageType = inner?.imageMessage ? 'image' : inner?.videoMessage ? 'video' : 'text';
+            } else if (msg.ephemeralMessage) {
+                const inner = msg.ephemeralMessage.message;
+                text = inner?.conversation || inner?.extendedTextMessage?.text || '';
+            }
+            return { text: text.trim(), messageType, media };
         } catch (error) {
-            logger.error('Failed to download media:', error);
-            return null;
+            logger.error('Error extracting message content:', error);
+            return { text: '', messageType: 'text', media: null };
         }
     }
 
-    async processCommand(sock, message, text, user, group, isGroup) {
-        const prefixUsed = this.detectPrefix(text);
-        if (!prefixUsed && !this.shouldProcessNoPrefix(text, isGroup, group)) {
-            return false;
-        }
-
-        const commandText = prefixUsed ? text.slice(prefixUsed.length) : text;
-        const args = commandText.trim().split(/\s+/);
-        const commandName = args.shift()?.toLowerCase();
-
-        if (!commandName) return false;
-
-        const command = commandHandler.getCommand(commandName);
-        if (!command) {
-            if (prefixUsed) {
-                await this.handleUnknownCommand(sock, message, commandName);
-            }
-            return false;
-        }
-
-        logger.info(`Command executed: ${commandName} by ${user.phone || user.jid} in ${isGroup ? 'group' : 'private'}`);
-        
-        await commandHandler.handleCommand(sock, message, commandName, args);
-        return true;
+    normalizePhoneNumber(jid) {
+        return normNum(jid);
     }
 
-    detectPrefix(text) {
-        const prefixes = [
-            config.prefix,
-            config.secondaryPrefix,
-            '!', '.', '/', '#', '>', '<'
-        ].filter(p => p && p.trim());
-
-        for (const prefix of prefixes) {
-            if (text.startsWith(prefix)) {
-                return prefix;
-            }
+    isOwner(sender, message, sock) {
+        if (!config.ownerNumbers?.length) return false;
+        const nums = new Set();
+        nums.add(normNum(sender));
+        if (message?.key?.participant) nums.add(normNum(message.key.participant));
+        if (message?.key?.fromMe && sock?.user?.id) nums.add(normNum(sock.user.id));
+        if (message?.key?.remoteJid && !message.key.remoteJid.endsWith('@g.us')) {
+            nums.add(normNum(message.key.remoteJid));
         }
-
-        return null;
-    }
-
-    shouldProcessNoPrefix(text, isGroup, group) {
-        if (!config.noPrefixEnabled) return false;
-        
-        if (isGroup) {
-            return group?.settings?.noPrefixEnabled === true;
+        nums.delete('');
+        for (const ownerJid of config.ownerNumbers) {
+            const ownerNum = normNum(ownerJid);
+            if (ownerNum && nums.has(ownerNum)) return true;
         }
-        
-        return config.privateNoPrefixEnabled === true;
-    }
-
-    async handleUnknownCommand(sock, message, commandName) {
-        const from = message.key.remoteJid;
-        const suggestions = await commandHandler.searchCommands(commandName);
-        
-        let response = `❓ *Unknown Command*\n\n*"${commandName}"* is not a valid command.`;
-        
-        if (suggestions.length > 0) {
-            response += '\n\n*Did you mean:*\n';
-            suggestions.slice(0, 3).forEach(cmd => {
-                response += `• ${config.prefix}${cmd.name} - ${cmd.description}\n`;
-            });
-        }
-        
-        response += `\n*Type ${config.prefix}help for all commands*`;
-        
-        await sock.sendMessage(from, { text: response });
-    }
-
-    async handleAutoReply(sock, message, text, user, isGroup) {
-        if (!this.autoReplyEnabled || isGroup) return;
-
-        const autoReplies = cache.get('autoReplies') || {};
-        const lowerText = text.toLowerCase();
-        
-        for (const [trigger, reply] of Object.entries(autoReplies)) {
-            if (lowerText.includes(trigger.toLowerCase())) {
-                await sock.sendMessage(message.key.remoteJid, { text: reply });
-                return true;
-            }
-        }
-
         return false;
     }
 
-    async handleChatBot(sock, message, text, user, isGroup) {
-        if (!this.chatBotEnabled) return;
-        if (isGroup && !text.includes('@' + sock.user.id.split(':')[0])) return;
-
-        try {
-            const aiService = require('../services/aiService');
-            const response = await aiService.generateResponse(text, user, isGroup);
-            
-            if (response) {
-                await sock.sendMessage(message.key.remoteJid, { 
-                    text: response,
-                    contextInfo: {
-                        mentionedJid: isGroup ? [user.jid] : undefined
-                    }
-                });
-                return true;
-            }
-        } catch (error) {
-            logger.error('ChatBot error:', error);
+    isSudo(sender, message, sock) {
+        if (this.isOwner(sender, message, sock)) return true;
+        if (!sender || !config.sudoers?.length) return false;
+        const nums = new Set();
+        if (message?.key?.participant) nums.add(normNum(message.key.participant));
+        nums.add(normNum(sender));
+        nums.delete('');
+        for (const sudoJid of config.sudoers) {
+            if (nums.has(normNum(sudoJid))) return true;
         }
-
         return false;
     }
 
-    async handleMentions(sock, message, text, isGroup) {
-        if (!isGroup || !text.includes('@')) return;
-
-        const mentions = text.match(/@(\d+)/g);
-        if (!mentions) return;
-
-        const mentionedUsers = mentions.map(mention => 
-            mention.replace('@', '') + '@s.whatsapp.net'
-        );
-
-        const from = message.key.remoteJid;
-        const metadata = await sock.groupMetadata(from);
-        const validMentions = mentionedUsers.filter(jid =>
-            metadata.participants.some(p => p.id === jid)
-        );
-
-        if (validMentions.length > 0) {
-            await updateGroup(from, {
-                $inc: { mentionsCount: validMentions.length }
-            });
-        }
-    }
-
-    async handleQuotedMessage(sock, message, quoted, user) {
-        if (!quoted) return;
-
-        const quotedContent = this.extractMessageContent({ message: quoted });
-        if (quotedContent?.media) {
-            const mediaData = await this.downloadMedia(message, quotedContent.media);
-            if (mediaData) {
-                await mediaHandler.processQuotedMedia(sock, message, mediaData, user);
-            }
-        }
-    }
-
-    async saveMessage(message, user, group, messageContent) {
+    async startTyping(sock, from) {
+        if (!config.autoTyping) return;
         try {
-            const messageData = {
-                messageId: message.key.id,
-                from: message.key.remoteJid,
-                sender: message.key.participant || message.key.remoteJid,
-                timestamp: message.messageTimestamp * 1000,
-                content: messageContent.text,
-                messageType: messageContent.messageType,
-                isGroup: !!group,
-                hasMedia: !!messageContent.media,
-                isCommand: messageContent.text.startsWith(config.prefix),
-                userData: {
-                    phone: user.phone,
-                    name: user.name
-                }
-            };
+            await sock.sendPresenceUpdate('composing', from);
+            if (this.typingIntervals.has(from)) clearInterval(this.typingIntervals.get(from));
+            const interval = setInterval(async () => {
+                try { await sock.sendPresenceUpdate('composing', from); }
+                catch { this.stopTyping(from); }
+            }, 10000);
+            this.typingIntervals.set(from, interval);
+        } catch {}
+    }
 
-            await createMessage(messageData);
-        } catch (error) {
-            logger.error('Failed to save message:', error);
+    stopTyping(from) {
+        if (this.typingIntervals.has(from)) {
+            clearInterval(this.typingIntervals.get(from));
+            this.typingIntervals.delete(from);
+        }
+    }
+
+    async startRecording(sock, from) {
+        if (!config.autoRecording) return;
+        try {
+            await sock.sendPresenceUpdate('recording', from);
+            if (this.recordingIntervals.has(from)) clearInterval(this.recordingIntervals.get(from));
+            const interval = setInterval(async () => {
+                try { await sock.sendPresenceUpdate('recording', from); }
+                catch { this.stopRecording(from); }
+            }, 10000);
+            this.recordingIntervals.set(from, interval);
+        } catch {}
+    }
+
+    stopRecording(from) {
+        if (this.recordingIntervals.has(from)) {
+            clearInterval(this.recordingIntervals.get(from));
+            this.recordingIntervals.delete(from);
         }
     }
 
     async handleIncomingMessage(sock, message) {
         try {
-            if (!message || message.key.fromMe) return;
-            
+            if (!message?.key) return;
+
             const from = message.key.remoteJid;
-            const sender = message.key.participant || from;
-            const isGroup = from.endsWith('@g.us');
-            
+            const fromMe = message.key.fromMe;
+
+            if (!from || from === 'status@broadcast') return;
+
+            let sender;
+            if (from.endsWith('@g.us')) {
+                sender = message.key.participant || sock.user?.id || from;
+            } else if (fromMe) {
+                sender = sock.user?.id || from;
+            } else {
+                sender = from;
+            }
+
+            const isOwnerUser = this.isOwner(sender, message, sock);
+            const isSudoUser = this.isSudo(sender, message, sock);
+
+            if (config.autoRead && !fromMe) {
+                try { await sock.readMessages([message.key]); } catch {}
+            }
+
+            const stanzaId = resolveStanzaId(message);
+
+            const replyHandler = findReplyHandler(stanzaId);
+            const chatHandler = !from.endsWith('@g.us') ? findChatHandler(from) : null;
+            const hasActiveHandler = !!(replyHandler || chatHandler);
+
+            if (fromMe && !config.selfMode && !isOwnerUser && !isSudoUser && !hasActiveHandler) {
+                return;
+            }
+
+            if (from.endsWith('@g.us') && !fromMe) {
+                try { if (await checkBan(sock, message)) return; } catch {}
+                try { if (await checkSpam(sock, message)) return; } catch {}
+                try { if (await checkAntilink(sock, message)) return; } catch {}
+                try { if (await checkBadWord(sock, message)) return; } catch {}
+            }
+
             const messageContent = this.extractMessageContent(message);
             if (!messageContent) return;
 
-            const spamCheck = await antiSpam.checkSpam(sender, message);
-            if (spamCheck.isSpam && spamCheck.action === 'block') return;
+            const text = messageContent.text;
 
-            let user = await getUser(sender);
-            if (!user) {
-                user = await createUser({
-                    jid: sender,
-                    phone: sender.split('@')[0],
-                    name: message.pushName || 'Unknown',
-                    isGroup: false
-                });
-            } else {
-                await updateUser(sender, {
-                    name: message.pushName || user.name,
-                    lastSeen: new Date(),
-                    $inc: { messageCount: 1 }
-                });
+            if (!isOwnerUser && !isSudoUser && this.isSpamming(sender)) return;
+
+            const handleAutoDownload = await getAutoDownload();
+            const autoHandled = await handleAutoDownload(sock, message, from, sender, text);
+            if (autoHandled) return;
+
+            if (replyHandler && typeof replyHandler.handler === 'function') {
+                try { await replyHandler.handler(text, message); return; }
+                catch (error) { logger.error('Reply handler error:', error); }
             }
 
-            let group = null;
-            if (isGroup) {
-                group = await getGroup(from);
-                if (!group) {
-                    try {
-                        const metadata = await sock.groupMetadata(from);
-                        group = await createGroup({
-                            jid: from,
-                            name: metadata.subject,
-                            participants: metadata.participants.length,
-                            createdBy: metadata.owner,
-                            createdAt: new Date(metadata.creation * 1000)
-                        });
-                    } catch (error) {
-                        logger.error('Failed to create group:', error);
+            if (!stanzaId && chatHandler && typeof chatHandler.handler === 'function') {
+                const isPrefixedMsg = text.startsWith(config.prefix);
+                if (!isPrefixedMsg) {
+                    try { await chatHandler.handler(text, message); return; }
+                    catch (error) { logger.error('Chat handler error:', error); }
+                }
+            }
+
+            if (!text?.length) return;
+
+            if (config.whitelist?.enabled && !isOwnerUser && !isSudoUser) return;
+
+            const ownerNoPrefix = config.ownerNoPrefix && (isOwnerUser || isSudoUser);
+            const isPrefixed = text.startsWith(config.prefix);
+
+            if (!isPrefixed && !ownerNoPrefix) return;
+
+            if (config.autoTyping) {
+                await this.startTyping(sock, from);
+            } else if (config.autoRecording) {
+                await this.startRecording(sock, from);
+            }
+
+            const commandHandler = await this.initializeCommandHandler();
+            if (!commandHandler) {
+                this.stopTyping(from);
+                this.stopRecording(from);
+                return;
+            }
+
+            const commandText = ownerNoPrefix && !isPrefixed
+                ? text.trim()
+                : text.slice(config.prefix.length).trim();
+
+            if (!commandText?.length) {
+                this.stopTyping(from);
+                this.stopRecording(from);
+                return;
+            }
+
+            const args = commandText.split(/\s+/);
+            const commandName = args.shift()?.toLowerCase();
+
+            if (!commandName) {
+                this.stopTyping(from);
+                this.stopRecording(from);
+                return;
+            }
+
+            const command = commandHandler.getCommand(commandName);
+
+            if (!command) {
+                this.stopTyping(from);
+                this.stopRecording(from);
+                if (isPrefixed) {
+                    const suggestions = commandHandler.searchCommands(commandName);
+                    let response = `Command "${commandName}" not found.`;
+                    if (suggestions?.length > 0) {
+                        response += `\n\nDid you mean:\n${suggestions.slice(0, 3).map(c => `${config.prefix}${c.name}`).join('\n')}`;
                     }
-                } else {
-                    await updateGroup(from, {
-                        $inc: { messageCount: 1 },
-                        lastActivity: new Date()
-                    });
+                    response += `\n\nType ${config.prefix}help for all commands`;
+                    await sock.sendMessage(from, { text: response }, { quoted: message });
                 }
+                return;
             }
 
-            await this.saveMessage(message, user, group, messageContent);
-
-            if (messageContent.media) {
-                const mediaData = await this.downloadMedia(message, messageContent.media);
-                if (mediaData) {
-                    await mediaHandler.processMedia(sock, message, mediaData, user, group);
-                }
+            try {
+                await commandHandler.handleCommand(sock, message, commandName, args);
+            } catch (error) {
+                logger.error(`Command ${commandName} failed:`, error);
+                await sock.sendMessage(from, {
+                    text: `❌ Error executing ${commandName}: ${error.message}`
+                }, { quoted: message });
+            } finally {
+                this.stopTyping(from);
+                this.stopRecording(from);
+                try { await sock.sendPresenceUpdate('available', from); } catch {}
             }
-
-            if (messageContent.quoted) {
-                await this.handleQuotedMessage(sock, message, messageContent.quoted, user);
-            }
-
-            await this.handleMentions(sock, message, messageContent.text, isGroup);
-
-            const isCommand = await this.processCommand(
-                sock, message, messageContent.text, user, group, isGroup
-            );
-
-            if (!isCommand && messageContent.text) {
-                const autoReplyHandled = await this.handleAutoReply(
-                    sock, message, messageContent.text, user, isGroup
-                );
-
-                if (!autoReplyHandled) {
-                    await this.handleChatBot(
-                        sock, message, messageContent.text, user, isGroup
-                    );
-                }
-            }
-
-            cache.set(`lastMessage_${sender}`, {
-                content: messageContent.text,
-                timestamp: Date.now(),
-                messageType: messageContent.messageType,
-                isGroup
-            }, 300);
 
         } catch (error) {
             logger.error('Message handling error:', error);
-            await this.handleMessageError(sock, message, error);
-        }
-    }
-
-    async handleMessageError(sock, message, error) {
-        try {
-            const from = message.key.remoteJid;
-            const isOwner = config.ownerNumbers.includes(
-                message.key.participant || from
-            );
-
-            if (isOwner) {
-                await sock.sendMessage(from, {
-                    text: `⚠️ *Message Processing Error*\n\n*Error:* ${error.message}\n*Stack:* ${error.stack?.substring(0, 500)}...`
-                });
+            if (message?.key?.remoteJid) {
+                this.stopTyping(message.key.remoteJid);
+                this.stopRecording(message.key.remoteJid);
             }
-        } catch (err) {
-            logger.error('Failed to send error message:', err);
         }
     }
 
     async handleMessageUpdate(sock, messageUpdates) {
         for (const update of messageUpdates) {
             try {
-                const { key, update: messageUpdate } = update;
-                
-                if (messageUpdate.message) {
-                    logger.info(`Message updated: ${key.id}`);
-                    
-                    const updatedContent = this.extractMessageContent(messageUpdate);
-                    if (updatedContent) {
-                        cache.set(`updatedMessage_${key.id}`, {
-                            content: updatedContent.text,
-                            timestamp: Date.now()
-                        }, 300);
-                    }
-                }
+                logger.debug(`Message updated: ${update.key?.id}`);
             } catch (error) {
-                logger.error('Message update handling error:', error);
+                logger.error('Message update error:', error);
             }
         }
     }
@@ -409,285 +419,32 @@ class MessageHandler {
     async handleMessageDelete(sock, deletedMessages) {
         for (const deletion of deletedMessages) {
             try {
-                const { fromMe, id, participant, remoteJid } = deletion;
-                
-                logger.info(`Message deleted: ${id} from ${remoteJid}`);
-                
-                const isGroup = remoteJid.endsWith('@g.us');
-                const deletedBy = participant || remoteJid;
-                
-                if (isGroup) {
-                    const group = await getGroup(remoteJid);
-                    if (group?.settings?.antiDelete) {
-                        const cachedMessage = cache.get(`message_${id}`);
-                        if (cachedMessage) {
-                            await sock.sendMessage(remoteJid, {
-                                text: `🗑️ *Anti-Delete*\n\n*Deleted by:* @${deletedBy.split('@')[0]}\n*Content:* ${cachedMessage.content}\n*Time:* ${new Date(cachedMessage.timestamp).toLocaleString()}`,
-                                contextInfo: {
-                                    mentionedJid: [deletedBy]
-                                }
-                            });
-                        }
-                    }
-                }
-                
-                cache.del(`message_${id}`);
-                
+                logger.debug(`Message deleted: ${deletion.id} from ${deletion.remoteJid}`);
             } catch (error) {
-                logger.error('Message deletion handling error:', error);
+                logger.error('Message deletion error:', error);
             }
         }
-    }
-
-    async handleGroupParticipantsUpdate(sock, update) {
-        try {
-            const { id: groupId, participants, action } = update;
-            
-            const group = await getGroup(groupId);
-            if (!group) return;
-            
-            const metadata = await sock.groupMetadata(groupId);
-            
-            for (const participant of participants) {
-                switch (action) {
-                    case 'add':
-                        await this.handleMemberJoin(sock, groupId, participant, group, metadata);
-                        break;
-                    case 'remove':
-                    case 'leave':
-                        await this.handleMemberLeave(sock, groupId, participant, group, metadata);
-                        break;
-                    case 'promote':
-                        await this.handleMemberPromote(sock, groupId, participant, group, metadata);
-                        break;
-                    case 'demote':
-                        await this.handleMemberDemote(sock, groupId, participant, group, metadata);
-                        break;
-                }
-            }
-            
-            await updateGroup(groupId, {
-                participants: metadata.participants.length,
-                lastActivity: new Date()
-            });
-            
-        } catch (error) {
-            logger.error('Group participants update error:', error);
-        }
-    }
-
-    async handleMemberJoin(sock, groupId, participant, group, metadata) {
-        try {
-            logger.info(`Member joined: ${participant} in ${groupId}`);
-            
-            let user = await getUser(participant);
-            if (!user) {
-                user = await createUser({
-                    jid: participant,
-                    phone: participant.split('@')[0],
-                    name: 'New Member',
-                    joinedGroups: [groupId]
-                });
-            } else {
-                await updateUser(participant, {
-                    $addToSet: { joinedGroups: groupId }
-                });
-            }
-            
-            if (group.settings?.welcomeEnabled) {
-                const welcomeMessage = group.settings.welcomeMessage || 
-                    `👋 Welcome to *${metadata.subject}*!\n\nHello @${participant.split('@')[0]}, glad to have you here!\n\nType ${config.prefix}help to see available commands.`;
-                
-                if (group.settings.welcomeMedia) {
-                    const mediaPath = path.join(process.cwd(), 'src', 'assets', group.settings.welcomeMedia);
-                    if (await fs.pathExists(mediaPath)) {
-                        const buffer = await fs.readFile(mediaPath);
-                        await sock.sendMessage(groupId, {
-                            image: buffer,
-                            caption: welcomeMessage,
-                            contextInfo: { mentionedJid: [participant] }
-                        });
-                        return;
-                    }
-                }
-                
-                await sock.sendMessage(groupId, {
-                    text: welcomeMessage,
-                    contextInfo: { mentionedJid: [participant] }
-                });
-            }
-            
-            if (group.settings?.autoRoleEnabled) {
-                const autoRole = group.settings.autoRole || 'member';
-                await updateUser(participant, {
-                    [`groupRoles.${groupId}`]: autoRole
-                });
-            }
-            
-        } catch (error) {
-            logger.error('Member join handling error:', error);
-        }
-    }
-
-    async handleMemberLeave(sock, groupId, participant, group, metadata) {
-        try {
-            logger.info(`Member left: ${participant} from ${groupId}`);
-            
-            await updateUser(participant, {
-                $pull: { joinedGroups: groupId },
-                $unset: { [`groupRoles.${groupId}`]: 1 }
-            });
-            
-            if (group.settings?.goodbyeEnabled) {
-                const goodbyeMessage = group.settings.goodbyeMessage || 
-                    `👋 *${participant.split('@')[0]}* has left the group.\n\nWe'll miss you! 😢`;
-                
-                await sock.sendMessage(groupId, {
-                    text: goodbyeMessage,
-                    contextInfo: { mentionedJid: [participant] }
-                });
-            }
-            
-        } catch (error) {
-            logger.error('Member leave handling error:', error);
-        }
-    }
-
-    async handleMemberPromote(sock, groupId, participant, group, metadata) {
-        try {
-            logger.info(`Member promoted: ${participant} in ${groupId}`);
-            
-            await updateUser(participant, {
-                [`groupRoles.${groupId}`]: 'admin'
-            });
-            
-            if (group.settings?.promoteNotifyEnabled) {
-                await sock.sendMessage(groupId, {
-                    text: `🎉 *@${participant.split('@')[0]}* has been promoted to admin!`,
-                    contextInfo: { mentionedJid: [participant] }
-                });
-            }
-            
-        } catch (error) {
-            logger.error('Member promote handling error:', error);
-        }
-    }
-
-    async handleMemberDemote(sock, groupId, participant, group, metadata) {
-        try {
-            logger.info(`Member demoted: ${participant} in ${groupId}`);
-            
-            await updateUser(participant, {
-                [`groupRoles.${groupId}`]: 'member'
-            });
-            
-            if (group.settings?.demoteNotifyEnabled) {
-                await sock.sendMessage(groupId, {
-                    text: `📉 *@${participant.split('@')[0]}* has been demoted from admin.`,
-                    contextInfo: { mentionedJid: [participant] }
-                });
-            }
-            
-        } catch (error) {
-            logger.error('Member demote handling error:', error);
-        }
-    }
-
-    async handleGroupUpdate(sock, update) {
-        try {
-            const { id: groupId, subject, desc, announce, restrict } = update;
-            
-            const group = await getGroup(groupId);
-            if (!group) return;
-            
-            const updateData = {};
-            
-            if (subject !== undefined) {
-                updateData.name = subject;
-                logger.info(`Group name updated: ${groupId} -> ${subject}`);
-            }
-            
-            if (desc !== undefined) {
-                updateData.description = desc;
-                logger.info(`Group description updated: ${groupId}`);
-            }
-            
-            if (announce !== undefined) {
-                updateData['settings.announceMode'] = announce;
-                logger.info(`Group announce mode: ${groupId} -> ${announce}`);
-            }
-            
-            if (restrict !== undefined) {
-                updateData['settings.restrictMode'] = restrict;
-                logger.info(`Group restrict mode: ${groupId} -> ${restrict}`);
-            }
-            
-            if (Object.keys(updateData).length > 0) {
-                await updateGroup(groupId, updateData);
-            }
-            
-        } catch (error) {
-            logger.error('Group update handling error:', error);
-        }
-    }
-
-    setAutoReplyStatus(enabled) {
-        this.autoReplyEnabled = enabled;
-        logger.info(`Auto-reply ${enabled ? 'enabled' : 'disabled'}`);
-    }
-
-    setChatBotStatus(enabled) {
-        this.chatBotEnabled = enabled;
-        logger.info(`ChatBot ${enabled ? 'enabled' : 'disabled'}`);
     }
 
     async getMessageStats() {
-        const stats = cache.get('messageStats') || {
-            totalMessages: 0,
-            commandsExecuted: 0,
-            mediaProcessed: 0,
-            groupMessages: 0,
-            privateMessages: 0
-        };
-        
-        return stats;
-    }
-
-    async updateMessageStats(type) {
-        const stats = await this.getMessageStats();
-        stats.totalMessages++;
-        
-        switch (type) {
-            case 'command':
-                stats.commandsExecuted++;
-                break;
-            case 'media':
-                stats.mediaProcessed++;
-                break;
-            case 'group':
-                stats.groupMessages++;
-                break;
-            case 'private':
-                stats.privateMessages++;
-                break;
+        try {
+            return await cache.get('messageStats') || {
+                totalMessages: 0, commandsExecuted: 0,
+                mediaProcessed: 0, groupMessages: 0, privateMessages: 0
+            };
+        } catch {
+            return { totalMessages: 0, commandsExecuted: 0, mediaProcessed: 0, groupMessages: 0, privateMessages: 0 };
         }
-        
-        cache.set('messageStats', stats, 3600);
     }
 }
 
-const messageHandler = new MessageHandler();
+export const messageHandler = new MessageHandler();
 
-module.exports = {
+export default {
     messageHandler,
     handleIncomingMessage: (sock, message) => messageHandler.handleIncomingMessage(sock, message),
     handleMessageUpdate: (sock, updates) => messageHandler.handleMessageUpdate(sock, updates),
     handleMessageDelete: (sock, deletions) => messageHandler.handleMessageDelete(sock, deletions),
-    handleGroupParticipantsUpdate: (sock, update) => messageHandler.handleGroupParticipantsUpdate(sock, update),
-    handleGroupUpdate: (sock, update) => messageHandler.handleGroupUpdate(sock, update),
-    setAutoReplyStatus: (enabled) => messageHandler.setAutoReplyStatus(enabled),
-    setChatBotStatus: (enabled) => messageHandler.setChatBotStatus(enabled),
     getMessageStats: () => messageHandler.getMessageStats(),
-    extractMessageContent: (message) => messageHandler.extractMessageContent(message),
-    downloadMedia: (message, media) => messageHandler.downloadMedia(message, media)
+    extractMessageContent: (message) => messageHandler.extractMessageContent(message)
 };

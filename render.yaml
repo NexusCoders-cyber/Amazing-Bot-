@@ -1,10 +1,17 @@
 services:
   - type: web
     name: ilom-whatsapp-bot
-    env: node
-    buildCommand: npm install
+    runtime: node
+    plan: free
+    buildCommand: npm install --production=false
     startCommand: npm start
+    healthCheckPath: /health
     envVars:
       - key: NODE_ENV
         value: production
-    healthCheckPath: /health
+      - key: PORT
+        value: 5000
+      - key: PUBLIC_MODE
+        value: false
+      - key: DATABASE_ENABLED
+        value: false

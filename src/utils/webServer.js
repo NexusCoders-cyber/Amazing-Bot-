@@ -1,14 +1,19 @@
-const express = require('express');
-const cors = require('cors');
-const helmet = require('helmet');
-const rateLimit = require('express-rate-limit');
-const compression = require('compression');
-const morgan = require('morgan');
-const path = require('path');
-const fs = require('fs-extra');
-const config = require('../config');
-const logger = require('./logger');
-const { cache } = require('./cache');
+import express from 'express';
+import cors from 'cors';
+import helmet from 'helmet';
+import rateLimit from 'express-rate-limit';
+import compression from 'compression';
+import morgan from 'morgan';
+import path from 'path';
+import fs from 'fs-extra';
+import { fileURLToPath } from 'url';
+import { dirname } from 'path';
+import config from '../config.js';
+import logger from './logger.js';
+import { cache } from './cache.js';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 
 class WebServer {
     constructor() {
@@ -43,16 +48,35 @@ class WebServer {
             const port = config.server.port || 3000;
             const host = config.server.host || '0.0.0.0';
 
-            this.server = this.app.listen(port, host, () => {
-                this.isRunning = true;
-                logger.info(`🌐 Web server running on http://${host}:${port}`);
+            return new Promise((resolve, reject) => {
+                this.server = this.app.listen(port, host, () => {
+                    this.isRunning = true;
+                    logger.info(`🌐 Web server running on http://${host}:${port}`);
+                    resolve(this.server);
+                });
+
+                this.server.on('error', (error) => {
+                    if (error.code === 'EADDRINUSE') {
+                        logger.error(`Port ${port} is already in use. Trying alternative ports...`);
+                        
+                        const altPort = port + 1;
+                        this.server = this.app.listen(altPort, host, () => {
+                            this.isRunning = true;
+                            logger.info(`🌐 Web server running on http://${host}:${altPort}`);
+                            resolve(this.server);
+                        });
+                        
+                        this.server.on('error', (err) => {
+                            logger.error('Web server error on alternative port:', err);
+                            reject(err);
+                        });
+                    } else {
+                        logger.error('Web server error:', error);
+                        reject(error);
+                    }
+                });
             });
 
-            this.server.on('error', (error) => {
-                logger.error('Web server error:', error);
-            });
-
-            return this.server;
         } catch (error) {
             logger.error('Failed to start web server:', error);
             throw error;
@@ -130,11 +154,16 @@ class WebServer {
         this.app.get('/stats', this.handleStats.bind(this));
         this.app.get('/api/status', this.handleAPIStatus.bind(this));
 
+        // Add QR routes
+        this.app.get('/qr', this.handleQRPage.bind(this));
+        this.app.get('/qr/image', this.handleQRImage.bind(this));
+        this.app.get('/qr/data', this.handleQRData.bind(this));
+
         await this.loadAPIRoutes();
-        
+
         this.app.use(express.static(path.join(__dirname, '..', 'assets', 'public')));
-        
-        this.app.get('*', this.handle404.bind(this));
+
+        this.app.use(this.handle404.bind(this));
 
         logger.info('Web server routes configured');
     }
@@ -156,15 +185,15 @@ class WebServer {
                     const routePath = path.join(routesPath, file);
                     const routeName = path.basename(file, '.js');
                     
-                    delete require.cache[require.resolve(routePath)];
-                    const route = require(routePath);
+                    const routeModule = await import(routePath);
+                    const route = routeModule.default || routeModule;
                     
-                    if (typeof route === 'function' && route.length === 4) {
+                    if (typeof route === 'function' || (route && typeof route.stack === 'object')) {
                         this.app.use(`/api/${routeName}`, route);
                         this.routes.set(routeName, route);
-                        logger.debug(`Loaded API route: /api/${routeName}`);
+                        logger.info(`✅ Loaded API route: /api/${routeName}`);
                     } else {
-                        logger.warn(`Skipping invalid route ${file}: not a valid middleware function`);
+                        logger.warn(`Skipping invalid route ${file}: not a valid Express router or middleware function`);
                     }
                 } catch (error) {
                     logger.warn(`Skipping problematic route ${file}: ${error.message}`);
@@ -356,7 +385,7 @@ module.exports = router;`;
         try {
             const botInfo = {
                 name: config.botName,
-                version: require('../constants').BOT_VERSION,
+                version: (await import('../constants.js')).default.BOT_VERSION,
                 description: config.botDescription,
                 status: 'online',
                 uptime: process.uptime(),
@@ -379,7 +408,7 @@ module.exports = router;`;
 
     async handleHealth(req, res) {
         try {
-            const { databaseManager } = require('./database');
+            const { databaseManager } = await import('./database.js');
             
             const health = {
                 status: 'healthy',
@@ -406,14 +435,14 @@ module.exports = router;`;
 
     async handleStats(req, res) {
         try {
-            const { commandManager } = require('./commandManager');
-            const { pluginManager } = require('./pluginManager');
-            const { taskScheduler } = require('./scheduler');
+            const { commandManager } = await import('./commandManager.js');
+            const { pluginManager } = await import('./pluginManager.js');
+            const { taskScheduler } = await import('./scheduler.js');
 
             const stats = {
                 bot: {
                     name: config.botName,
-                    version: require('../constants').BOT_VERSION,
+                    version: (await import('../constants.js')).default.BOT_VERSION,
                     uptime: process.uptime(),
                     connected: global.sock?.user ? true : false
                 },
@@ -455,6 +484,174 @@ module.exports = router;`;
                 error: 'API status error',
                 message: error.message
             });
+        }
+    }
+
+    async handleQRPage(req, res) {
+        try {
+            const { qrService } = await import('../services/qrService.js');
+            const qrStatus = qrService.getQRStatus();
+
+            if (!qrStatus.enabled) {
+                return res.status(403).send(`
+                    <html>
+                        <head><title>QR Scanner Disabled</title></head>
+                        <body style="font-family: Arial, sans-serif; text-align: center; padding: 50px;">
+                            <h1>QR Scanner is Disabled</h1>
+                            <p>Set <code>QR_SCANNER_ENABLED=true</code> in your environment variables to enable QR scanner.</p>
+                        </body>
+                    </html>
+                `);
+            }
+
+            if (!qrStatus.hasQR) {
+                return res.status(404).send(`
+                    <html>
+                        <head><title>No QR Code Available</title></head>
+                        <body style="font-family: Arial, sans-serif; text-align: center; padding: 50px;">
+                            <h1>No QR Code Available</h1>
+                            <p>QR code will be generated when WhatsApp connection requires authentication.</p>
+                            <p>Please wait for the connection process to start...</p>
+                        </body>
+                    </html>
+                `);
+            }
+
+            res.send(`
+                <html>
+                    <head>
+                        <title>WhatsApp QR Code</title>
+                        <style>
+                            body {
+                                font-family: Arial, sans-serif;
+                                text-align: center;
+                                padding: 20px;
+                                background-color: #f5f5f5;
+                            }
+                            .container {
+                                max-width: 400px;
+                                margin: 0 auto;
+                                background: white;
+                                padding: 30px;
+                                border-radius: 10px;
+                                box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+                            }
+                            h1 {
+                                color: #25d366;
+                                margin-bottom: 20px;
+                            }
+                            img {
+                                max-width: 100%;
+                                height: auto;
+                                border: 2px solid #25d366;
+                                border-radius: 5px;
+                            }
+                            p {
+                                color: #666;
+                                margin: 15px 0;
+                            }
+                            .refresh-btn {
+                                background: #25d366;
+                                color: white;
+                                border: none;
+                                padding: 10px 20px;
+                                border-radius: 5px;
+                                cursor: pointer;
+                                margin-top: 15px;
+                            }
+                            .refresh-btn:hover {
+                                background: #128c7e;
+                            }
+                        </style>
+                    </head>
+                    <body>
+                        <div class="container">
+                            <h1>📱 WhatsApp QR Code</h1>
+                            <p>Scan this QR code with WhatsApp to connect your bot</p>
+                            <img src="/qr/image" alt="WhatsApp QR Code" />
+                            <p><small>If the QR code doesn't work, refresh the page</small></p>
+                            <button class="refresh-btn" onclick="location.reload()">🔄 Refresh</button>
+                        </div>
+                    </body>
+                </html>
+            `);
+        } catch (error) {
+            logger.error('Error serving QR page:', error);
+            res.status(500).send(`
+                <html>
+                    <head><title>Error</title></head>
+                    <body style="font-family: Arial, sans-serif; text-align: center; padding: 50px;">
+                        <h1>Error Loading QR Code</h1>
+                        <p>${error.message}</p>
+                    </body>
+                </html>
+            `);
+        }
+    }
+
+    async handleQRImage(req, res) {
+        try {
+            const { qrService } = await import('../services/qrService.js');
+            const qrStatus = qrService.getQRStatus();
+
+            if (!qrStatus.enabled) {
+                return res.status(403).json({ error: 'QR scanner is not enabled' });
+            }
+
+            if (!qrStatus.hasQR || !qrStatus.exists) {
+                return res.status(404).json({ error: 'QR code image not found' });
+            }
+
+            res.setHeader('Content-Type', 'image/png');
+            res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+            res.setHeader('Pragma', 'no-cache');
+            res.setHeader('Expires', '0');
+
+            const fs = await import('fs-extra');
+            const qrStream = fs.createReadStream(qrStatus.path);
+            qrStream.pipe(res);
+
+            qrStream.on('error', (error) => {
+                logger.error('Error streaming QR image:', error);
+                if (!res.headersSent) {
+                    res.status(500).json({ error: 'Failed to stream QR image' });
+                }
+            });
+        } catch (error) {
+            logger.error('Error serving QR image:', error);
+            if (!res.headersSent) {
+                res.status(500).json({ error: 'Failed to serve QR image' });
+            }
+        }
+    }
+
+    async handleQRData(req, res) {
+        try {
+            const { qrService } = await import('../services/qrService.js');
+            const qrStatus = qrService.getQRStatus();
+
+            if (!qrStatus.enabled) {
+                return res.status(403).json({ error: 'QR scanner is not enabled' });
+            }
+
+            if (!qrStatus.qrData) {
+                return res.status(404).json({ error: 'No QR data available' });
+            }
+
+            const qrDataURL = await qrService.generateQRDataURL(qrStatus.qrData);
+
+            if (!qrDataURL) {
+                return res.status(500).json({ error: 'Failed to generate QR data URL' });
+            }
+
+            res.json({
+                status: 'success',
+                qrDataURL: qrDataURL,
+                timestamp: new Date().toISOString()
+            });
+        } catch (error) {
+            logger.error('Error getting QR data:', error);
+            res.status(500).json({ error: 'Failed to get QR data' });
         }
     }
 
@@ -574,15 +771,12 @@ _Server running on http://localhost:${serverInfo.port}_`;
     }
 }
 
-const webServer = new WebServer();
+export const webServer = new WebServer();
 
-module.exports = {
-    webServer,
-    startWebServer: (app) => webServer.startWebServer(app),
-    stopWebServer: () => webServer.stopWebServer(),
-    addRoute: (path, router) => webServer.addRoute(path, router),
-    addMiddleware: (middleware) => webServer.addMiddleware(middleware),
-    createWebhook: (path, handler) => webServer.createWebhook(path, handler),
-    getStats: () => webServer.getStats(),
-    generateServerInfo: () => webServer.generateServerInfo()
-};
+export const startWebServer = (app) => webServer.startWebServer(app);
+export const stopWebServer = () => webServer.stopWebServer();
+export const addRoute = (path, router) => webServer.addRoute(path, router);
+export const addMiddleware = (middleware) => webServer.addMiddleware(middleware);
+export const createWebhook = (path, handler) => webServer.createWebhook(path, handler);
+export const getStats = () => webServer.getStats();
+export const generateServerInfo = () => webServer.generateServerInfo();

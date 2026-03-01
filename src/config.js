@@ -1,37 +1,65 @@
-require('dotenv').config();
+import 'dotenv/config';
+
+function normalizePhoneNumber(phone) {
+    if (!phone || phone.trim() === '') return null;
+    let cleaned = phone.trim();
+    cleaned = cleaned.replace(/@s\.whatsapp\.net|@c\.us|@g\.us|@broadcast/g, '');
+    cleaned = cleaned.split(':')[0];
+    cleaned = cleaned.replace(/[^0-9]/g, '');
+    if (cleaned.length < 10) return null;
+    return `${cleaned}@s.whatsapp.net`;
+}
 
 const config = {
     botName: process.env.BOT_NAME || 'Ilom Bot',
     botVersion: process.env.BOT_VERSION || '1.0.0',
-    botDescription: process.env.BOT_DESCRIPTION || '🧠 Amazing Bot created by Ilom',
-    botThumbnail: process.env.BOT_THUMBNAIL || 'https://i.ibb.co/2M7rtLk/ilom.jpg',
-    botRepository: process.env.BOT_REPOSITORY || 'https://github.com/ilom-tech/whatsapp-bot',
+    botDescription: process.env.BOT_DESCRIPTION || 'Amazing Bot created by Ilom',
+    botThumbnail: process.env.BOT_THUMBNAIL || 'https://files.catbox.moe/13uws5.jpg',
+    botRepository: process.env.BOT_REPOSITORY || 'https://github.com/NexusCoders-cyber/Amazing-Bot-.git',
     botWebsite: process.env.BOT_WEBSITE || 'https://ilom.tech',
 
     prefix: process.env.PREFIX || '.',
-    secondaryPrefix: process.env.SECONDARY_PREFIX || '!',
+    ownerNoPrefix: process.env.OWNER_NO_PREFIX === 'true',
     noPrefixEnabled: process.env.NO_PREFIX_ENABLED === 'true',
     privateNoPrefixEnabled: process.env.PRIVATE_NO_PREFIX_ENABLED === 'true',
 
-    ownerNumbers: (process.env.OWNER_NUMBERS || '254700143167').split(',').map(num => 
-        num.includes('@') ? num : `${num.trim()}@s.whatsapp.net`
-    ),
+    ownerNumbers: (process.env.OWNER_NUMBERS || '').split(',')
+        .map(normalizePhoneNumber)
+        .filter(Boolean),
+    
     ownerName: process.env.OWNER_NAME || 'Ilom',
+    
+    sudoers: (process.env.SUDO_NUMBERS || '').split(',')
+        .map(normalizePhoneNumber)
+        .filter(Boolean),
 
     publicMode: process.env.PUBLIC_MODE === 'true',
     selfMode: process.env.SELF_MODE === 'true',
-    markOnline: process.env.MARK_ONLINE !== 'false',
-    readMessages: process.env.READ_MESSAGES === 'true',
+    autoOnline: process.env.AUTO_ONLINE !== 'false',
+    autoRead: process.env.AUTO_READ === 'true',
     autoTyping: process.env.AUTO_TYPING === 'true',
+    autoRecording: process.env.AUTO_RECORDING === 'true',
+    
+    whitelist: {
+        enabled: process.env.WHITELIST_ENABLED === 'true',
+        bypassOwners: true,
+        bypassSudos: true,
+        bypassBotOwner: true
+    },
 
     database: {
-        url: (process.env.DATABASE_URL && process.env.DATABASE_URL.length > 20) ? process.env.DATABASE_URL : 'mongodb://localhost:27017/ilombot',
+        url: process.env.MONGODB_URL || process.env.DATABASE_URL || 'mongodb://localhost:27017/ilombot',
+        enabled: process.env.DATABASE_ENABLED !== 'false',
         options: {
             useNewUrlParser: true,
             useUnifiedTopology: true,
-            maxPoolSize: 10,
-            serverSelectionTimeoutMS: 5000,
-            socketTimeoutMS: 45000,
+            maxPoolSize: parseInt(process.env.DB_MAX_POOL_SIZE) || 10,
+            serverSelectionTimeoutMS: parseInt(process.env.DB_TIMEOUT) || 5000,
+            socketTimeoutMS: parseInt(process.env.DB_SOCKET_TIMEOUT) || 45000,
+            bufferMaxEntries: 0,
+            bufferCommands: false,
+            autoCreate: false,
+            autoIndex: false
         }
     },
 
@@ -59,20 +87,36 @@ const config = {
         sessionId: process.env.SESSION_ID || null,
         sessionPath: process.env.SESSION_PATH || './session',
         qrTimeout: parseInt(process.env.QR_TIMEOUT) || 60000,
-        maxQrRetries: parseInt(process.env.MAX_QR_RETRIES) || 3
+        maxQrRetries: parseInt(process.env.MAX_QR_RETRIES) || 3,
+        qrScannerEnabled: process.env.QR_SCANNER_ENABLED === 'true'
     },
 
     features: {
-        autoReply: process.env.AUTO_REPLY_ENABLED === 'true',
+        autoReply: process.env.AUTO_REPLY_ENABLED !== 'false',
         chatBot: process.env.CHAT_BOT_ENABLED === 'true',
         antiSpam: process.env.ANTI_SPAM_ENABLED !== 'false',
-        antiLink: process.env.ANTI_LINK_ENABLED === 'true',
-        welcome: process.env.WELCOME_ENABLED === 'true',
-        goodbye: process.env.GOODBYE_ENABLED === 'true',
+        antiLink: process.env.ANTI_LINK_ENABLED !== 'false',
+        welcome: process.env.WELCOME_ENABLED !== 'false',
+        goodbye: process.env.GOODBYE_ENABLED !== 'false',
         autoSticker: process.env.AUTO_STICKER_ENABLED === 'true',
         autoRead: process.env.AUTO_READ_ENABLED === 'true',
-        antiDelete: process.env.ANTI_DELETE_ENABLED === 'true',
+        antiDelete: process.env.ANTI_DELETE_ENABLED !== 'false',
         backup: process.env.AUTO_BACKUP_ENABLED === 'true'
+    },
+
+    events: {
+        callAutoReject: process.env.EVENT_CALL_AUTO_REJECT !== 'false',
+        groupJoin: process.env.EVENT_GROUP_JOIN !== 'false',
+        groupLeave: process.env.EVENT_GROUP_LEAVE !== 'false',
+        groupUpdate: process.env.EVENT_GROUP_UPDATE !== 'false',
+        groupPromote: process.env.EVENT_GROUP_PROMOTE !== 'false',
+        groupDemote: process.env.EVENT_GROUP_DEMOTE !== 'false',
+        messageReaction: process.env.EVENT_MESSAGE_REACTION !== 'false',
+        autoReaction: process.env.EVENT_AUTO_REACTION === 'true',
+        levelUp: process.env.EVENT_LEVEL_UP !== 'false',
+        contactUpdate: process.env.EVENT_CONTACT_UPDATE === 'true',
+        messageUpdate: process.env.EVENT_MESSAGE_UPDATE !== 'false',
+        messageDelete: process.env.EVENT_MESSAGE_DELETE !== 'false'
     },
 
     limits: {
@@ -217,7 +261,19 @@ function validateConfig() {
     const errors = [];
     
     if (!config.ownerNumbers || config.ownerNumbers.length === 0) {
-        errors.push('OWNER_NUMBERS is required');
+        console.warn('⚠️  OWNER_NUMBERS is not set in .env file');
+    } else {
+        console.log(`✅ Loaded ${config.ownerNumbers.length} owner number(s)`);
+        config.ownerNumbers.forEach((num, idx) => {
+            console.log(`   Owner ${idx + 1}: ${num.split('@')[0]}`);
+        });
+    }
+    
+    if (config.sudoers && config.sudoers.length > 0) {
+        console.log(`✅ Loaded ${config.sudoers.length} sudo user(s)`);
+        config.sudoers.forEach((num, idx) => {
+            console.log(`   Sudo ${idx + 1}: ${num.split('@')[0]}`);
+        });
     }
     
     if (config.database.url === 'mongodb://localhost:27017/ilombot') {
@@ -237,7 +293,7 @@ function validateConfig() {
     }
     
     if (errors.length > 0) {
-        console.error('❌ Configuration errors:');
+        console.error('Configuration errors:');
         errors.forEach(error => console.error(`  - ${error}`));
         process.exit(1);
     }
@@ -265,7 +321,7 @@ function isProduction() {
 
 validateConfig();
 
-module.exports = {
+export default {
     ...config,
     validateConfig,
     getEnvironmentInfo,

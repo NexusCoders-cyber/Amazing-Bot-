@@ -180,10 +180,6 @@ build/
 dist/
 out/
 
-# Package manager
-package-lock.json*
-yarn.lock*
-pnpm-lock.yaml*
 
 # Local configuration
 config/local.json
@@ -301,3 +297,7 @@ __tests__/fixtures/
 *.zip
 *.rar
 *.7z
+
+# Replit (keep these for project configuration)
+.upm/
+.breakpoints

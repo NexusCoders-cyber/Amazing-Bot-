@@ -1,61 +1,32 @@
-module.exports = {
+export default {
     name: 'ping',
-    aliases: ['p', 'latency'],
+    aliases: ['p', 'speed', 'latency'],
     category: 'general',
-    description: 'Check bot response time and server latency',
+    description: 'Check bot response speed',
     usage: 'ping',
     example: 'ping',
     cooldown: 3,
-    permissions: [],
+    permissions: ['user'],
     args: false,
     minArgs: 0,
-    maxArgs: 0,
-    typing: true,
-    premium: false,
-    hidden: false,
-    ownerOnly: false,
 
-    async execute({ sock, message, args, command, user, group, from, sender, isGroup, isGroupAdmin, isBotAdmin, prefix }) {
-        const startTime = Date.now();
-        
-        const pingMessage = await sock.sendMessage(from, {
-            text: '🏓 Pinging...'
-        });
-        
-        const endTime = Date.now();
-        const responseTime = endTime - startTime;
+    async execute({ sock, message, from }) {
+        const start = Date.now();
+        const sent = await sock.sendMessage(from, { text: 'Pinging...' }, { quoted: message });
+        const latency = Date.now() - start;
+
         const uptime = process.uptime();
-        
         const hours = Math.floor(uptime / 3600);
         const minutes = Math.floor((uptime % 3600) / 60);
         const seconds = Math.floor(uptime % 60);
-        
-        const uptimeString = `${hours}h ${minutes}m ${seconds}s`;
-        
-        const memoryUsage = process.memoryUsage();
-        const memoryMB = Math.round(memoryUsage.heapUsed / 1024 / 1024);
-        
-        const responseText = `🏓 *Pong!*
+        const uptimeStr = `${hours}h ${minutes}m ${seconds}s`;
 
-📊 *Performance Stats:*
-├ Response Time: ${responseTime}ms
-├ Uptime: ${uptimeString}
-├ Memory Usage: ${memoryMB} MB
-├ Platform: ${process.platform}
-├ Node.js: ${process.version}
-╰ Status: Online ✅
-
-💻 *Bot Info:*
-├ Name: ${require('../../config').botName}
-├ Version: ${require('../../constants').BOT_VERSION}
-├ Creator: ${require('../../constants').BOT_AUTHOR}
-╰ Mode: ${isGroup ? 'Group' : 'Private'}
-
-_🧠 Amazing Bot 🧠 v1 created by Ilom_`;
+        const memUsage = process.memoryUsage();
+        const memMB = Math.round(memUsage.heapUsed / 1024 / 1024);
 
         await sock.sendMessage(from, {
-            text: responseText,
-            edit: pingMessage.key
+            text: `Pong!\n\nLatency: ${latency}ms\nUptime: ${uptimeStr}\nMemory: ${memMB}MB`,
+            edit: sent.key
         });
     }
 };

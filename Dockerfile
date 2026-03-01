@@ -1,4 +1,4 @@
-FROM node:18-alpine
+FROM node:23-alpine
 
 LABEL maintainer="Ilom <contact@ilom.tech>"
 LABEL version="1.0.0"
@@ -33,14 +33,14 @@ RUN mkdir -p logs temp session media backups && \
 
 USER node
 
-EXPOSE 3000
+EXPOSE 5000
 
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
-    CMD curl -f http://localhost:3000/health || exit 1
+    CMD curl -f http://localhost:5000/health || exit 1
 
 ENV NODE_ENV=production
-ENV PORT=3000
+ENV PORT=5000
 
 VOLUME ["/app/logs", "/app/session", "/app/media", "/app/backups"]
 
-CMD ["npm", "start"]
+CMD ["node", "index.js"]

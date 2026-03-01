@@ -1,7 +1,7 @@
-const axios = require('axios');
-const config = require('../config');
-const logger = require('../utils/logger');
-const { cache } = require('../utils/cache');
+import axios from 'axios';
+import config from '../config.js';
+import logger from '../utils/logger.js';
+import { cache } from '../utils/cache.js';
 
 class AIService {
     constructor() {
@@ -507,17 +507,14 @@ class AIService {
     }
 }
 
-const aiService = new AIService();
+export const aiService = new AIService();
 
-module.exports = {
-    aiService,
-    initialize: () => aiService.initialize(),
-    getChatGPTResponse: (prompt, user, context) => aiService.getChatGPTResponse(prompt, user, context),
-    getGeminiResponse: (prompt, user, context) => aiService.getGeminiResponse(prompt, user, context),
-    generateResponse: (prompt, user, isGroup) => aiService.generateResponse(prompt, user, isGroup),
-    generateImage: (prompt, user) => aiService.generateImage(prompt, user),
-    translateText: (text, targetLang, sourceLang) => aiService.translateText(text, targetLang, sourceLang),
-    analyzeText: (text, type) => aiService.analyzeText(text, type),
-    clearConversationHistory: (userId, provider) => aiService.clearConversationHistory(userId, provider),
-    getServiceStats: () => aiService.getServiceStats()
-};
+export const initialize = () => aiService.initialize();
+export const getChatGPTResponse = (prompt, user, context) => aiService.getChatGPTResponse(prompt, user, context);
+export const getGeminiResponse = (prompt, user, context) => aiService.getGeminiResponse(prompt, user, context);
+export const generateResponse = (prompt, user, isGroup) => aiService.generateResponse(prompt, user, isGroup);
+export const generateImage = (prompt, user) => aiService.generateImage(prompt, user);
+export const translateText = (text, targetLang, sourceLang) => aiService.translateText(text, targetLang, sourceLang);
+export const analyzeText = (text, type) => aiService.analyzeText(text, type);
+export const clearConversationHistory = (userId, provider) => aiService.clearConversationHistory(userId, provider);
+export const getServiceStats = () => aiService.getServiceStats();

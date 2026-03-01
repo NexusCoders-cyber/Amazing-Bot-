@@ -1,6 +1,6 @@
-const { cache } = require('./cache');
-const logger = require('./logger');
-const config = require('../config');
+import { cache } from './cache.js';
+import logger from './logger.js';
+import config from '../config.js';
 
 class AntiSpam {
     constructor() {
@@ -448,7 +448,7 @@ class AntiSpam {
 
 const antiSpam = new AntiSpam();
 
-module.exports = {
+export default {
     antiSpam,
     checkSpam: (userId, message, context) => antiSpam.checkSpam(userId, message, context),
     getUserViolations: (userId) => antiSpam.getUserViolations(userId),

@@ -1,7 +1,7 @@
-const NodeCache = require('node-cache');
-const Redis = require('redis');
-const config = require('../config');
-const logger = require('./logger');
+import NodeCache from 'node-cache';
+import Redis from 'redis';
+import config from '../config.js';
+import logger from './logger.js';
 
 class CacheManager {
     constructor() {
@@ -467,23 +467,17 @@ const commandCache = cacheManager.createNamespace('command');
 const mediaCache = cacheManager.createNamespace('media');
 const sessionCache = cacheManager.createNamespace('session');
 
-module.exports = {
-    cache: cacheManager,
-    userCache,
-    groupCache,
-    commandCache,
-    mediaCache,
-    sessionCache,
-    initializeCache: () => cacheManager.initializeCache(),
-    get: (key) => cacheManager.get(key),
-    set: (key, value, ttl) => cacheManager.set(key, value, ttl),
-    del: (key) => cacheManager.del(key),
-    has: (key) => cacheManager.has(key),
-    keys: (pattern) => cacheManager.keys(pattern),
-    flush: () => cacheManager.flush(),
-    flushByPattern: (pattern) => cacheManager.flushByPattern(pattern),
-    getStats: () => cacheManager.getStats(),
-    cleanup: () => cacheManager.cleanup(),
-    isHealthy: () => cacheManager.isHealthy(),
-    getOrSet: (key, factory, ttl) => cacheManager.getOrSet(key, factory, ttl)
-};
+export const cache = cacheManager;
+export { userCache, groupCache, commandCache, mediaCache, sessionCache };
+export const initializeCache = () => cacheManager.initializeCache();
+export const get = (key) => cacheManager.get(key);
+export const set = (key, value, ttl) => cacheManager.set(key, value, ttl);
+export const del = (key) => cacheManager.del(key);
+export const has = (key) => cacheManager.has(key);
+export const keys = (pattern) => cacheManager.keys(pattern);
+export const flush = () => cacheManager.flush();
+export const flushByPattern = (pattern) => cacheManager.flushByPattern(pattern);
+export const getStats = () => cacheManager.getStats();
+export const cleanup = () => cacheManager.cleanup();
+export const isHealthy = () => cacheManager.isHealthy();
+export const getOrSet = (key, factory, ttl) => cacheManager.getOrSet(key, factory, ttl);

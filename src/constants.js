@@ -448,7 +448,7 @@ const SUPPORTED_FORMATS = {
     DOCUMENT: ['pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'txt']
 };
 
-module.exports = {
+export default {
     BOT_VERSION,
     BOT_NAME,
     BOT_AUTHOR,
