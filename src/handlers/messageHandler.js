@@ -33,8 +33,80 @@ function resolveStanzaId(message) {
         || null;
 }
 
-function normNum(jid) {
-    return String(jid || '').replace(/@s\.whatsapp\.net|@c\.us|@g\.us|@broadcast|@lid/g, '').split(':')[0].replace(/[^0-9]/g, '');
+function isLid(jid) {
+    if (!jid) return false;
+    return String(jid).endsWith('@lid');
+}
+
+function stripJid(jid) {
+    if (!jid) return '';
+    if (isLid(jid)) return '';
+    return String(jid)
+        .replace(/@s\.whatsapp\.net|@c\.us|@g\.us|@broadcast/g, '')
+        .split(':')[0]
+        .replace(/[^0-9]/g, '');
+}
+
+function getBotPhone(sock) {
+    const candidates = [sock.user?.id, sock.authState?.creds?.me?.id];
+    for (const c of candidates) {
+        if (!c || isLid(c)) continue;
+        const n = stripJid(c);
+        if (n) return n;
+    }
+    return '';
+}
+
+function resolveJidFromParticipants(jid, participants) {
+    if (!jid || !participants?.length) return jid;
+    if (!isLid(jid)) return jid;
+    const lidNum = String(jid).split('@')[0].split(':')[0];
+    const match = participants.find(p =>
+        String(p.id || '').split('@')[0].split(':')[0] === lidNum
+    );
+    return match?.id || jid;
+}
+
+async function resolveSenderPhone(sock, groupJid, rawParticipant) {
+    if (!rawParticipant) return '';
+    if (!isLid(rawParticipant)) return stripJid(rawParticipant);
+    try {
+        const meta = await sock.groupMetadata(groupJid);
+        if (meta?.participants) {
+            const resolved = resolveJidFromParticipants(rawParticipant, meta.participants);
+            if (!isLid(resolved)) return stripJid(resolved);
+        }
+    } catch {}
+    return '';
+}
+
+function isOwner(senderPhone, message, sock) {
+    if (!config.ownerNumbers?.length) return false;
+    const nums = new Set();
+    if (senderPhone) nums.add(senderPhone);
+    if (message?.key?.fromMe) {
+        const botNum = getBotPhone(sock);
+        if (botNum) nums.add(botNum);
+    }
+    if (message?.key?.remoteJid && !message.key.remoteJid.endsWith('@g.us')) {
+        const n = stripJid(message.key.remoteJid);
+        if (n) nums.add(n);
+    }
+    nums.delete('');
+    for (const ownerJid of config.ownerNumbers) {
+        const ownerNum = stripJid(ownerJid);
+        if (ownerNum && nums.has(ownerNum)) return true;
+    }
+    return false;
+}
+
+function isSudo(senderPhone, message, sock) {
+    if (isOwner(senderPhone, message, sock)) return true;
+    if (!senderPhone || !config.sudoers?.length) return false;
+    for (const sudoJid of config.sudoers) {
+        if (senderPhone === stripJid(sudoJid)) return true;
+    }
+    return false;
 }
 
 function findReplyHandler(stanzaId) {
@@ -83,16 +155,16 @@ class MessageHandler {
         }
     }
 
-    isSpamming(sender) {
+    isSpamming(senderPhone) {
         if (!config.antiSpam?.enabled) return false;
         const maxMessages = config.antiSpam?.maxMessages || 10;
         const windowMs = config.antiSpam?.windowMs || 10000;
         const now = Date.now();
-        if (!this.spamTracker.has(sender)) {
-            this.spamTracker.set(sender, { count: 1, windowStart: now });
+        if (!this.spamTracker.has(senderPhone)) {
+            this.spamTracker.set(senderPhone, { count: 1, windowStart: now });
             return false;
         }
-        const data = this.spamTracker.get(sender);
+        const data = this.spamTracker.get(senderPhone);
         if (now - data.windowStart > windowMs) {
             data.count = 1;
             data.windowStart = now;
@@ -186,40 +258,6 @@ class MessageHandler {
         }
     }
 
-    normalizePhoneNumber(jid) {
-        return normNum(jid);
-    }
-
-    isOwner(sender, message, sock) {
-        if (!config.ownerNumbers?.length) return false;
-        const nums = new Set();
-        nums.add(normNum(sender));
-        if (message?.key?.participant) nums.add(normNum(message.key.participant));
-        if (message?.key?.fromMe && sock?.user?.id) nums.add(normNum(sock.user.id));
-        if (message?.key?.remoteJid && !message.key.remoteJid.endsWith('@g.us')) {
-            nums.add(normNum(message.key.remoteJid));
-        }
-        nums.delete('');
-        for (const ownerJid of config.ownerNumbers) {
-            const ownerNum = normNum(ownerJid);
-            if (ownerNum && nums.has(ownerNum)) return true;
-        }
-        return false;
-    }
-
-    isSudo(sender, message, sock) {
-        if (this.isOwner(sender, message, sock)) return true;
-        if (!sender || !config.sudoers?.length) return false;
-        const nums = new Set();
-        if (message?.key?.participant) nums.add(normNum(message.key.participant));
-        nums.add(normNum(sender));
-        nums.delete('');
-        for (const sudoJid of config.sudoers) {
-            if (nums.has(normNum(sudoJid))) return true;
-        }
-        return false;
-    }
-
     async startTyping(sock, from) {
         if (!config.autoTyping) return;
         try {
@@ -269,24 +307,27 @@ class MessageHandler {
 
             if (!from || from === 'status@broadcast') return;
 
-            let sender;
+            const rawParticipant = from.endsWith('@g.us')
+                ? (message.key.participant || '')
+                : (fromMe ? (sock.user?.id || '') : from);
+
+            let senderPhone;
             if (from.endsWith('@g.us')) {
-                sender = message.key.participant || sock.user?.id || from;
-            } else if (fromMe) {
-                sender = sock.user?.id || from;
+                senderPhone = await resolveSenderPhone(sock, from, rawParticipant);
             } else {
-                sender = from;
+                senderPhone = isLid(rawParticipant) ? getBotPhone(sock) : stripJid(rawParticipant);
             }
 
-            const isOwnerUser = this.isOwner(sender, message, sock);
-            const isSudoUser = this.isSudo(sender, message, sock);
+            const senderJid = senderPhone ? senderPhone + '@s.whatsapp.net' : rawParticipant;
+
+            const isOwnerUser = isOwner(senderPhone, message, sock);
+            const isSudoUser = isSudo(senderPhone, message, sock);
 
             if (config.autoRead && !fromMe) {
                 try { await sock.readMessages([message.key]); } catch {}
             }
 
             const stanzaId = resolveStanzaId(message);
-
             const replyHandler = findReplyHandler(stanzaId);
             const chatHandler = !from.endsWith('@g.us') ? findChatHandler(from) : null;
             const hasActiveHandler = !!(replyHandler || chatHandler);
@@ -307,10 +348,10 @@ class MessageHandler {
 
             const text = messageContent.text;
 
-            if (!isOwnerUser && !isSudoUser && this.isSpamming(sender)) return;
+            if (!isOwnerUser && !isSudoUser && senderPhone && this.isSpamming(senderPhone)) return;
 
             const handleAutoDownload = await getAutoDownload();
-            const autoHandled = await handleAutoDownload(sock, message, from, sender, text);
+            const autoHandled = await handleAutoDownload(sock, message, from, senderJid, text);
             if (autoHandled) return;
 
             if (replyHandler && typeof replyHandler.handler === 'function') {
@@ -333,19 +374,34 @@ class MessageHandler {
             const ownerNoPrefix = config.ownerNoPrefix && (isOwnerUser || isSudoUser);
             const isPrefixed = text.startsWith(config.prefix);
 
-            if (!isPrefixed && !ownerNoPrefix) return;
+            const commandHandler = await this.initializeCommandHandler();
+            if (!commandHandler) return;
+
+            if (!isPrefixed && !ownerNoPrefix) {
+                const rawArgs = text.trim().split(/\s+/);
+                const rawName = rawArgs[0]?.toLowerCase();
+                if (rawName) {
+                    const cmd = commandHandler.getCommand(rawName);
+                    if (cmd?.noPrefix === true) {
+                        if (config.autoTyping) await this.startTyping(sock, from);
+                        try {
+                            await commandHandler.handleCommand(sock, message, rawName, rawArgs.slice(1));
+                        } catch (error) {
+                            logger.error(`No-prefix command ${rawName} failed:`, error);
+                        } finally {
+                            this.stopTyping(from);
+                            this.stopRecording(from);
+                            try { await sock.sendPresenceUpdate('available', from); } catch {}
+                        }
+                    }
+                }
+                return;
+            }
 
             if (config.autoTyping) {
                 await this.startTyping(sock, from);
             } else if (config.autoRecording) {
                 await this.startRecording(sock, from);
-            }
-
-            const commandHandler = await this.initializeCommandHandler();
-            if (!commandHandler) {
-                this.stopTyping(from);
-                this.stopRecording(from);
-                return;
             }
 
             const commandText = ownerNoPrefix && !isPrefixed
