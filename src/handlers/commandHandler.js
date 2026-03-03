@@ -142,6 +142,21 @@ class CommandHandler {
         return '';
     }
 
+    resolvePrivateSenderPhone(sock, fromMe, remoteJid, userJid) {
+        if (fromMe) {
+            return getBotPhoneNum(sock);
+        }
+        if (userJid && !isLidJid(userJid)) {
+            const n = rawNum(userJid);
+            if (n && n.length >= 7) return n;
+        }
+        if (remoteJid && !isLidJid(remoteJid)) {
+            const n = rawNum(remoteJid);
+            if (n && n.length >= 7) return n;
+        }
+        return '';
+    }
+
     async isGroupAdmin(sock, groupJid, participantJid) {
         try {
             const metadata = await this.getGroupMetadata(sock, groupJid, true);
@@ -275,17 +290,23 @@ class CommandHandler {
     async handleCommand(sock, message, commandName, args) {
         const startTime = Date.now();
         const from = message.key.remoteJid;
+        const fromMe = message.key.fromMe;
         const isGroup = from.endsWith('@g.us');
 
-        const rawParticipant = isGroup
-            ? (message.key.participant || '')
-            : (message.key.fromMe ? (sock?.user?.id || '') : from);
+        let rawParticipant = '';
+        let senderPhone = '';
 
-        let senderPhone;
         if (isGroup) {
-            senderPhone = await this.resolveParticipantPhone(sock, from, rawParticipant);
+            rawParticipant = message.key.participant || '';
+            if (fromMe) {
+                senderPhone = getBotPhoneNum(sock);
+                if (!senderPhone) senderPhone = await this.resolveParticipantPhone(sock, from, rawParticipant);
+            } else {
+                senderPhone = await this.resolveParticipantPhone(sock, from, rawParticipant);
+            }
         } else {
-            senderPhone = isLidJid(rawParticipant) ? getBotPhoneNum(sock) : rawNum(rawParticipant);
+            rawParticipant = fromMe ? (sock?.user?.id || '') : from;
+            senderPhone = this.resolvePrivateSenderPhone(sock, fromMe, from, rawParticipant);
         }
 
         const senderJid = senderPhone ? senderPhone + '@s.whatsapp.net' : (rawParticipant || from);
@@ -319,6 +340,11 @@ class CommandHandler {
                     isBotAdmin = false;
                 }
                 if (isOwnerUser || isSudoUser) isGroupAdmin = true;
+            } else {
+                if (isOwnerUser || isSudoUser) {
+                    isGroupAdmin = true;
+                    isBotAdmin = true;
+                }
             }
 
             const hasPermission = await this.checkPermissions(
