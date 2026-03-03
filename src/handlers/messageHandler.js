@@ -57,24 +57,49 @@ function getBotPhone(sock) {
     return '';
 }
 
-function resolveJidFromParticipants(jid, participants) {
-    if (!jid || !participants?.length) return jid;
-    if (!isLid(jid)) return jid;
-    const lidNum = String(jid).split('@')[0].split(':')[0];
-    const match = participants.find(p =>
-        String(p.id || '').split('@')[0].split(':')[0] === lidNum
-    );
-    return match?.id || jid;
+function getBotLid(sock) {
+    const candidates = [sock.user?.lid, sock.authState?.creds?.me?.lid];
+    for (const c of candidates) {
+        if (!c) continue;
+        return String(c).split('@')[0].split(':')[0];
+    }
+    return '';
+}
+
+function findParticipantInList(participants, jid) {
+    if (!jid || !participants?.length) return null;
+    const jidStr = String(jid);
+    const phoneNum = isLid(jidStr) ? '' : stripJid(jidStr);
+    const lidNum = jidStr.split('@')[0].split(':')[0];
+
+    for (const p of participants) {
+        const pStr = String(p.id || '');
+        const pPhone = isLid(pStr) ? '' : stripJid(pStr);
+        const pLid = pStr.split('@')[0].split(':')[0];
+
+        if (phoneNum && pPhone && phoneNum === pPhone) return p;
+        if (lidNum && pLid && lidNum === pLid) return p;
+    }
+    return null;
 }
 
 async function resolveSenderPhone(sock, groupJid, rawParticipant) {
     if (!rawParticipant) return '';
-    if (!isLid(rawParticipant)) return stripJid(rawParticipant);
+    if (!isLid(rawParticipant)) {
+        const n = stripJid(rawParticipant);
+        if (n && n.length >= 7) return n;
+    }
     try {
         const meta = await sock.groupMetadata(groupJid);
         if (meta?.participants) {
-            const resolved = resolveJidFromParticipants(rawParticipant, meta.participants);
-            if (!isLid(resolved)) return stripJid(resolved);
+            const found = findParticipantInList(meta.participants, rawParticipant);
+            if (found) {
+                const fStr = String(found.id || '');
+                if (!isLid(fStr)) {
+                    const n = stripJid(fStr);
+                    if (n && n.length >= 7) return n;
+                }
+            }
         }
     } catch {}
     return '';
@@ -83,16 +108,18 @@ async function resolveSenderPhone(sock, groupJid, rawParticipant) {
 function isOwner(senderPhone, message, sock) {
     if (!config.ownerNumbers?.length) return false;
     const nums = new Set();
-    if (senderPhone) nums.add(senderPhone);
+    if (senderPhone && senderPhone.length >= 7) nums.add(senderPhone);
     if (message?.key?.fromMe) {
         const botNum = getBotPhone(sock);
         if (botNum) nums.add(botNum);
     }
     if (message?.key?.remoteJid && !message.key.remoteJid.endsWith('@g.us')) {
-        const n = stripJid(message.key.remoteJid);
-        if (n) nums.add(n);
+        const jid = message.key.remoteJid;
+        if (!isLid(jid)) {
+            const n = stripJid(jid);
+            if (n && n.length >= 7) nums.add(n);
+        }
     }
-    nums.delete('');
     for (const ownerJid of config.ownerNumbers) {
         const ownerNum = stripJid(ownerJid);
         if (ownerNum && nums.has(ownerNum)) return true;
