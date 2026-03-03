@@ -36,6 +36,19 @@ function getBotPhoneNum(sock) {
     return '';
 }
 
+function getBotLidNum(sock) {
+    const candidates = [
+        sock?.user?.lid,
+        sock?.authState?.creds?.me?.lid,
+    ];
+    for (const c of candidates) {
+        if (!c) continue;
+        const s = String(c);
+        return s.split('@')[0].split(':')[0];
+    }
+    return '';
+}
+
 class CommandHandler {
     constructor() {
         this.cooldowns = new Map();
@@ -89,19 +102,22 @@ class CommandHandler {
         }
     }
 
-    findParticipantByLidOrPhone(participants, jid) {
+    findParticipantInList(participants, jid) {
         if (!jid || !participants?.length) return null;
         const jidStr = String(jid);
-        if (isLidJid(jidStr)) {
-            const lidNum = jidStr.split('@')[0].split(':')[0];
-            return participants.find(p => String(p.id || '').split('@')[0].split(':')[0] === lidNum) || null;
+
+        const phoneNum = isLidJid(jidStr) ? '' : rawNum(jidStr);
+        const lidNum = jidStr.split('@')[0].split(':')[0];
+
+        for (const p of participants) {
+            const pStr = String(p.id || '');
+            const pPhone = isLidJid(pStr) ? '' : rawNum(pStr);
+            const pLid = pStr.split('@')[0].split(':')[0];
+
+            if (phoneNum && pPhone && phoneNum === pPhone) return p;
+            if (lidNum && pLid && lidNum === pLid) return p;
         }
-        const phone = rawNum(jidStr);
-        if (!phone) return null;
-        return participants.find(p => {
-            if (isLidJid(p.id)) return false;
-            return rawNum(p.id) === phone;
-        }) || null;
+        return null;
     }
 
     async resolveParticipantPhone(sock, groupJid, participantJid) {
@@ -113,10 +129,13 @@ class CommandHandler {
         try {
             const meta = await this.getGroupMetadata(sock, groupJid, false);
             if (meta?.participants) {
-                const found = this.findParticipantByLidOrPhone(meta.participants, participantJid);
-                if (found && !isLidJid(found.id)) {
-                    const n = rawNum(found.id);
-                    if (n && n.length >= 7) return n;
+                const found = this.findParticipantInList(meta.participants, participantJid);
+                if (found) {
+                    const fStr = String(found.id || '');
+                    if (!isLidJid(fStr)) {
+                        const n = rawNum(fStr);
+                        if (n && n.length >= 7) return n;
+                    }
                 }
             }
         } catch {}
@@ -127,7 +146,7 @@ class CommandHandler {
         try {
             const metadata = await this.getGroupMetadata(sock, groupJid, true);
             if (!metadata?.participants) return false;
-            const p = this.findParticipantByLidOrPhone(metadata.participants, participantJid);
+            const p = this.findParticipantInList(metadata.participants, participantJid);
             return !!(p?.admin);
         } catch (err) {
             logger.error('isGroupAdmin error:', err);
@@ -139,24 +158,22 @@ class CommandHandler {
         try {
             const metadata = await this.getGroupMetadata(sock, groupJid, true);
             if (!metadata?.participants) return false;
-            const botNum = getBotPhoneNum(sock);
-            if (botNum) {
-                const bot = metadata.participants.find(p => {
-                    if (isLidJid(p.id)) return false;
-                    return rawNum(p.id) === botNum;
-                });
-                if (bot) return !!(bot.admin);
+
+            const botPhone = getBotPhoneNum(sock);
+            const botLid = getBotLidNum(sock);
+
+            for (const p of metadata.participants) {
+                const pStr = String(p.id || '');
+                const pPhone = isLidJid(pStr) ? '' : rawNum(pStr);
+                const pLid = pStr.split('@')[0].split(':')[0];
+
+                const matchPhone = botPhone && pPhone && botPhone === pPhone;
+                const matchLid = botLid && pLid && botLid === pLid;
+
+                if (matchPhone || matchLid) {
+                    return !!(p.admin);
+                }
             }
-            const botLidRaw = sock?.user?.lid || sock?.authState?.creds?.me?.lid || '';
-            if (botLidRaw) {
-                const botLid = String(botLidRaw).split('@')[0].split(':')[0];
-                const byLid = metadata.participants.find(p =>
-                    String(p.id || '').split('@')[0].split(':')[0] === botLid
-                );
-                if (byLid) return !!(byLid.admin);
-            }
-            logger.warn(`[isBotGroupAdmin] Bot not found in participants. botNum=${botNum}, sock.user.id=${sock?.user?.id}`);
-            logger.warn(`[isBotGroupAdmin] Participants: ${metadata.participants.slice(0, 5).map(p => p.id).join(', ')}`);
             return false;
         } catch (err) {
             logger.error('isBotGroupAdmin error:', err);
@@ -166,17 +183,24 @@ class CommandHandler {
 
     isOwner(senderPhone, message, sock) {
         if (!config.ownerNumbers?.length) return false;
+
         const nums = new Set();
+
         if (senderPhone && senderPhone.length >= 7) nums.add(senderPhone);
+
         if (message?.key?.fromMe) {
             const botNum = getBotPhoneNum(sock);
             if (botNum) nums.add(botNum);
         }
+
         if (message?.key?.remoteJid && !message.key.remoteJid.endsWith('@g.us')) {
-            const n = rawNum(message.key.remoteJid);
-            if (n && n.length >= 7) nums.add(n);
+            const jid = message.key.remoteJid;
+            if (!isLidJid(jid)) {
+                const n = rawNum(jid);
+                if (n && n.length >= 7) nums.add(n);
+            }
         }
-        logger.debug(`[isOwner] senderPhone=${senderPhone}, nums=${[...nums].join(',')}, ownerNumbers=${config.ownerNumbers.join(',')}`);
+
         for (const ownerJid of config.ownerNumbers) {
             const ownerNum = rawNum(ownerJid);
             if (ownerNum && nums.has(ownerNum)) return true;
@@ -210,7 +234,7 @@ class CommandHandler {
     }
 
     async checkPermissions(command, sock, message, from, isGroup, isGroupAdmin, isBotAdmin, isOwnerUser, isSudoUser) {
-        if (command.ownerOnly && !isOwnerUser && !isSudoUser) {
+        if (command.ownerOnly && !isOwnerUser) {
             await sock.sendMessage(from, { text: '❌ This command is only available to the bot owner.' }, { quoted: message });
             return false;
         }
@@ -266,16 +290,12 @@ class CommandHandler {
 
         const senderJid = senderPhone ? senderPhone + '@s.whatsapp.net' : (rawParticipant || from);
 
-        logger.debug(`[handleCommand] cmd=${commandName} rawParticipant=${rawParticipant} senderPhone=${senderPhone} isGroup=${isGroup}`);
-
         try {
             const command = this.getCommand(commandName);
             if (!command) return false;
 
             const isOwnerUser = this.isOwner(senderPhone, message, sock);
             const isSudoUser = this.isSudo(senderPhone, message, sock);
-
-            logger.debug(`[handleCommand] isOwner=${isOwnerUser} isSudo=${isSudoUser} senderPhone=${senderPhone}`);
 
             const cooldownCheck = this.checkCooldown(commandName, senderPhone || from, isOwnerUser, isSudoUser);
             if (cooldownCheck.onCooldown) {
@@ -300,8 +320,6 @@ class CommandHandler {
                 }
                 if (isOwnerUser || isSudoUser) isGroupAdmin = true;
             }
-
-            logger.debug(`[handleCommand] isGroupAdmin=${isGroupAdmin} isBotAdmin=${isBotAdmin}`);
 
             const hasPermission = await this.checkPermissions(
                 command, sock, message, from, isGroup, isGroupAdmin, isBotAdmin, isOwnerUser, isSudoUser
