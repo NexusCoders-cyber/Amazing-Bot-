@@ -23,14 +23,20 @@ async function getAutoDownload() {
 function resolveStanzaId(message) {
     const m = message.message;
     if (!m) return null;
-    return m.extendedTextMessage?.contextInfo?.stanzaId
-        || m.imageMessage?.contextInfo?.stanzaId
-        || m.videoMessage?.contextInfo?.stanzaId
-        || m.audioMessage?.contextInfo?.stanzaId
-        || m.documentMessage?.contextInfo?.stanzaId
-        || m.stickerMessage?.contextInfo?.stanzaId
-        || m.ephemeralMessage?.message?.extendedTextMessage?.contextInfo?.stanzaId
-        || null;
+
+    const ctx =
+        m.extendedTextMessage?.contextInfo ||
+        m.imageMessage?.contextInfo ||
+        m.videoMessage?.contextInfo ||
+        m.audioMessage?.contextInfo ||
+        m.documentMessage?.contextInfo ||
+        m.stickerMessage?.contextInfo ||
+        m.ephemeralMessage?.message?.extendedTextMessage?.contextInfo ||
+        m.viewOnceMessage?.message?.imageMessage?.contextInfo ||
+        m.viewOnceMessage?.message?.videoMessage?.contextInfo ||
+        null;
+
+    return ctx?.stanzaId || null;
 }
 
 function isLid(jid) {
@@ -102,6 +108,21 @@ async function resolveSenderPhone(sock, groupJid, rawParticipant) {
             }
         }
     } catch {}
+    return '';
+}
+
+function resolvePrivateSenderPhone(sock, fromMe, remoteJid, userJid) {
+    if (fromMe) {
+        return getBotPhone(sock);
+    }
+    if (userJid && !isLid(userJid)) {
+        const n = stripJid(userJid);
+        if (n && n.length >= 7) return n;
+    }
+    if (remoteJid && !isLid(remoteJid)) {
+        const n = stripJid(remoteJid);
+        if (n && n.length >= 7) return n;
+    }
     return '';
 }
 
@@ -334,18 +355,20 @@ class MessageHandler {
 
             if (!from || from === 'status@broadcast') return;
 
-            const rawParticipant = from.endsWith('@g.us')
-                ? (message.key.participant || '')
-                : (fromMe ? (sock.user?.id || '') : from);
+            const isGroup = from.endsWith('@g.us');
 
-            let senderPhone;
-            if (from.endsWith('@g.us')) {
+            let rawParticipant = '';
+            let senderPhone = '';
+
+            if (isGroup) {
+                rawParticipant = message.key.participant || '';
                 senderPhone = await resolveSenderPhone(sock, from, rawParticipant);
             } else {
-                senderPhone = isLid(rawParticipant) ? getBotPhone(sock) : stripJid(rawParticipant);
+                rawParticipant = fromMe ? (sock.user?.id || '') : from;
+                senderPhone = resolvePrivateSenderPhone(sock, fromMe, from, rawParticipant);
             }
 
-            const senderJid = senderPhone ? senderPhone + '@s.whatsapp.net' : rawParticipant;
+            const senderJid = senderPhone ? senderPhone + '@s.whatsapp.net' : (rawParticipant || from);
 
             const isOwnerUser = isOwner(senderPhone, message, sock);
             const isSudoUser = isSudo(senderPhone, message, sock);
@@ -356,14 +379,14 @@ class MessageHandler {
 
             const stanzaId = resolveStanzaId(message);
             const replyHandler = findReplyHandler(stanzaId);
-            const chatHandler = !from.endsWith('@g.us') ? findChatHandler(from) : null;
+            const chatHandler = !isGroup ? findChatHandler(from) : null;
             const hasActiveHandler = !!(replyHandler || chatHandler);
 
             if (fromMe && !config.selfMode && !isOwnerUser && !isSudoUser && !hasActiveHandler) {
                 return;
             }
 
-            if (from.endsWith('@g.us') && !fromMe) {
+            if (isGroup && !fromMe) {
                 try { if (await checkBan(sock, message)) return; } catch {}
                 try { if (await checkSpam(sock, message)) return; } catch {}
                 try { if (await checkAntilink(sock, message)) return; } catch {}
