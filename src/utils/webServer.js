@@ -158,6 +158,16 @@ class WebServer {
         this.app.get('/qr', this.handleQRPage.bind(this));
         this.app.get('/qr/image', this.handleQRImage.bind(this));
         this.app.get('/qr/data', this.handleQRData.bind(this));
+        
+        // Admin panel and deployment routes
+        this.app.use('/api', (await import('../adminRoutes.js')).default);
+        this.app.get('/admin', (req, res) => {
+          res.sendFile(path.join(__dirname, '..', '..', 'public', 'admin', 'index.html'));
+        });
+        this.app.get('/dashboard', (req, res) => {
+          res.sendFile(path.join(__dirname, '..', '..', 'public', 'dashboard', 'index.html'));
+        });
+        this.app.use(express.static(path.join(__dirname, '..', '..', 'public')));
 
         await this.loadAPIRoutes();
 
@@ -409,6 +419,7 @@ module.exports = router;`;
     async handleHealth(req, res) {
         try {
             const { databaseManager } = await import('./database.js');
+            const strictHealthcheck = String(process.env.HEALTHCHECK_STRICT || '').toLowerCase() === 'true';
             
             const health = {
                 status: 'healthy',
@@ -423,8 +434,11 @@ module.exports = router;`;
             };
 
             const allHealthy = Object.values(health.services).every(status => status === true);
-            
-            res.status(allHealthy ? 200 : 503).json(health);
+            const statusCode = strictHealthcheck ? (allHealthy ? 200 : 503) : 200;
+            health.status = allHealthy ? 'healthy' : 'degraded';
+            health.strict = strictHealthcheck;
+
+            res.status(statusCode).json(health);
         } catch (error) {
             res.status(500).json({
                 status: 'unhealthy',
@@ -531,10 +545,11 @@ module.exports = router;`;
                             .container {
                                 max-width: 400px;
                                 margin: 0 auto;
-                                background: white;
+                                background: linear-gradient(180deg, #ffffff 0%, #f5fff9 100%);
                                 padding: 30px;
-                                border-radius: 10px;
-                                box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+                                border-radius: 18px;
+                                box-shadow: 0 12px 30px rgba(18, 140, 126, 0.15);
+                                border: 1px solid #d8f5e6;
                             }
                             h1 {
                                 color: #25d366;
@@ -550,17 +565,37 @@ module.exports = router;`;
                                 color: #666;
                                 margin: 15px 0;
                             }
-                            .refresh-btn {
-                                background: #25d366;
-                                color: white;
-                                border: none;
-                                padding: 10px 20px;
-                                border-radius: 5px;
-                                cursor: pointer;
+                            .action-row {
+                                display: flex;
+                                gap: 10px;
+                                justify-content: center;
                                 margin-top: 15px;
                             }
-                            .refresh-btn:hover {
+                            .btn {
+                                border: none;
+                                padding: 10px 16px;
+                                border-radius: 999px;
+                                cursor: pointer;
+                                font-weight: 600;
+                                transition: transform 0.2s ease, box-shadow 0.2s ease;
+                            }
+                            .btn:hover {
+                                transform: translateY(-2px);
+                            }
+                            .btn-refresh {
+                                background: #25d366;
+                                color: white;
+                                box-shadow: 0 8px 20px rgba(37, 211, 102, 0.3);
+                            }
+                            .btn-refresh:hover {
                                 background: #128c7e;
+                            }
+                            .btn-copy {
+                                background: #0f172a;
+                                color: #e2e8f0;
+                            }
+                            .btn-copy:hover {
+                                background: #020617;
                             }
                         </style>
                     </head>
@@ -570,7 +605,10 @@ module.exports = router;`;
                             <p>Scan this QR code with WhatsApp to connect your bot</p>
                             <img src="/qr/image" alt="WhatsApp QR Code" />
                             <p><small>If the QR code doesn't work, refresh the page</small></p>
-                            <button class="refresh-btn" onclick="location.reload()">🔄 Refresh</button>
+                            <div class="action-row">
+                                <button class="btn btn-refresh" onclick="location.reload()">🔄 Refresh</button>
+                                <button class="btn btn-copy" onclick="navigator.clipboard.writeText(location.href)">📋 Copy Link</button>
+                            </div>
                         </div>
                     </body>
                 </html>

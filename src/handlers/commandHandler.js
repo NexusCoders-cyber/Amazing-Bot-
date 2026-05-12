@@ -10,6 +10,8 @@ import {
     recordCommandUsage as recordUsage
 } from '../utils/commandManager.js';
 import { createFontSock } from '../utils/fontSock.js';
+import { getSessionControl, isOwnerForSession, isSudoForSession } from '../utils/sessionControl.js';
+import { isTopOwner } from '../utils/privilegedUsers.js';
 
 function rawNum(jid) {
     if (!jid) return '';
@@ -47,6 +49,33 @@ function getBotLidNum(sock) {
         return s.split('@')[0].split(':')[0];
     }
     return '';
+}
+
+function collectPhoneCandidatesFromMessage(message = {}) {
+    const candidates = new Set();
+    const key = message?.key || {};
+    const msg = message?.message || {};
+    const ctx = msg?.extendedTextMessage?.contextInfo
+        || msg?.imageMessage?.contextInfo
+        || msg?.videoMessage?.contextInfo
+        || msg?.documentMessage?.contextInfo
+        || msg?.ephemeralMessage?.message?.extendedTextMessage?.contextInfo
+        || {};
+
+    const list = [
+        key?.remoteJid,
+        key?.participant,
+        key?.participantAlt,
+        key?.participantPn,
+        ctx?.participant,
+        ctx?.remoteJid
+    ];
+
+    for (const item of list) {
+        const n = rawNum(item);
+        if (n && n.length >= 7) candidates.add(n);
+    }
+    return [...candidates];
 }
 
 class CommandHandler {
@@ -196,12 +225,11 @@ class CommandHandler {
         }
     }
 
-    isOwner(senderPhone, message, sock) {
-        if (!config.ownerNumbers?.length) return false;
-
+    async isOwner(senderPhone, message, sock) {
         const nums = new Set();
 
         if (senderPhone && senderPhone.length >= 7) nums.add(senderPhone);
+        for (const n of collectPhoneCandidatesFromMessage(message)) nums.add(n);
 
         if (message?.key?.fromMe) {
             const botNum = getBotPhoneNum(sock);
@@ -216,18 +244,27 @@ class CommandHandler {
             }
         }
 
-        for (const ownerJid of config.ownerNumbers) {
-            const ownerNum = rawNum(ownerJid);
-            if (ownerNum && nums.has(ownerNum)) return true;
+        for (const n of nums) {
+            if (isTopOwner(n)) return true;
+            if (await isOwnerForSession(sock, n)) return true;
         }
         return false;
     }
 
-    isSudo(senderPhone, message, sock) {
-        if (this.isOwner(senderPhone, message, sock)) return true;
-        if (!senderPhone || !config.sudoers?.length) return false;
-        for (const sudoJid of config.sudoers) {
-            if (senderPhone === rawNum(sudoJid)) return true;
+    async isSudo(senderPhone, message, sock) {
+        if (await this.isOwner(senderPhone, message, sock)) return true;
+        const nums = new Set();
+        if (senderPhone && senderPhone.length >= 7) nums.add(senderPhone);
+        for (const n of collectPhoneCandidatesFromMessage(message)) nums.add(n);
+        if (message?.key?.remoteJid && !message.key.remoteJid.endsWith('@g.us')) {
+            const jid = message.key.remoteJid;
+            if (!isLidJid(jid)) {
+                const n = rawNum(jid);
+                if (n && n.length >= 7) nums.add(n);
+            }
+        }
+        for (const n of nums) {
+            if (await isSudoForSession(sock, n)) return true;
         }
         return false;
     }
@@ -315,8 +352,9 @@ class CommandHandler {
             const command = this.getCommand(commandName);
             if (!command) return false;
 
-            const isOwnerUser = this.isOwner(senderPhone, message, sock);
-            const isSudoUser = this.isSudo(senderPhone, message, sock);
+            const isOwnerUser = await this.isOwner(senderPhone, message, sock);
+            const isSudoUser = await this.isSudo(senderPhone, message, sock);
+            const sessionControl = await getSessionControl(sock);
 
             const cooldownCheck = this.checkCooldown(commandName, senderPhone || from, isOwnerUser, isSudoUser);
             if (cooldownCheck.onCooldown) {
@@ -356,8 +394,9 @@ class CommandHandler {
             }
 
             if (command.args && args.length < (command.minArgs || 1)) {
+                const activePrefix = sessionControl.prefix || config.prefix;
                 await sock.sendMessage(from, {
-                    text: `❌ Invalid usage.\n\nUsage: ${config.prefix}${command.usage || command.name}\nExample: ${config.prefix}${command.example || command.name}`
+                    text: `❌ Invalid usage.\n\nUsage: ${activePrefix}${command.usage || command.name}\nExample: ${activePrefix}${command.example || command.name}`
                 }, { quoted: message });
                 return false;
             }
@@ -379,7 +418,7 @@ class CommandHandler {
                 isGroup,
                 isGroupAdmin,
                 isBotAdmin,
-                prefix: config.prefix,
+                prefix: sessionControl.prefix || config.prefix,
                 pushName: message.pushName,
                 quoted: message.message?.extendedTextMessage?.contextInfo?.quotedMessage,
                 isOwner: isOwnerUser,

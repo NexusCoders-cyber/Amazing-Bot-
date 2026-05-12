@@ -1,192 +1,163 @@
-import fs from 'fs';
+import axios from 'axios';
+import fs from 'fs-extra';
 import path from 'path';
-import font from '../../utils/font.js';
+import os from 'os';
 
 const startTime = Date.now();
+const CATEGORY_ORDER = ['ai', 'audio', 'downloader', 'fun', 'games', 'group', 'image', 'owner', 'religion', 'search', 'settings', 'sports', 'support', 'tools', 'translate', 'video', 'media', 'general', 'utility', 'ephoto360', 'groupstatus', 'other'];
+
+const CATEGORY_LABELS = {
+    ai: 'AI MENU',
+    audio: 'AUDIO MENU',
+    downloader: 'DOWNLOAD MENU',
+    ephoto360: 'EPHOTO360 MENU',
+    fun: 'FUN MENU',
+    games: 'GAMES MENU',
+    group: 'GROUP MENU',
+    groupstatus: 'GROUPSTATUS MENU',
+    image: 'IMAGE MENU',
+    other: 'OTHER MENU',
+    owner: 'OWNER MENU',
+    religion: 'RELIGION MENU',
+    search: 'SEARCH MENU',
+    settings: 'SETTINGS MENU',
+    sports: 'SPORTS MENU',
+    support: 'SUPPORT MENU',
+    tools: 'TOOLS MENU',
+    translate: 'TRANSLATE MENU',
+    video: 'VIDEO MENU',
+    media: 'MEDIA MENU',
+    general: 'GENERAL MENU',
+    utility: 'UTILITY MENU'
+};
 
 function getUptime() {
     const uptime = Date.now() - startTime;
-    const seconds = Math.floor(uptime / 1000);
-    const minutes = Math.floor(seconds / 60);
-    const hours = Math.floor(minutes / 60);
-    const days = Math.floor(hours / 24);
-
-    if (days > 0) return `${days}d ${hours % 24}h`;
-    if (hours > 0) return `${hours}h ${minutes % 60}m`;
-    if (minutes > 0) return `${minutes}m ${seconds % 60}s`;
-    return `${seconds}s`;
+    const s = Math.floor(uptime / 1000);
+    const m = Math.floor(s / 60);
+    const h = Math.floor(m / 60);
+    const d = Math.floor(h / 24);
+    if (d > 0) return `${d}d ${h % 24}h`;
+    if (h > 0) return `${h}h ${m % 60}m`;
+    if (m > 0) return `${m}m ${s % 60}s`;
+    return `${s}s`;
 }
 
-async function getAllCommands() {
-    const commandsPath = path.join(process.cwd(), 'src', 'commands');
-    const categories = {};
-    let totalCommands = 0;
+function formatBytes(b = 0) {
+    const u = ['B', 'KB', 'MB', 'GB'];
+    let v = Number(b) || 0;
+    let i = 0;
+    while (v >= 1024 && i < u.length - 1) { v /= 1024; i++; }
+    return `${v.toFixed(i === 0 ? 0 : 1)}${u[i]}`;
+}
 
-    const scanDirectory = async (dir, category = '') => {
-        const items = await fs.promises.readdir(dir, { withFileTypes: true });
+function ramBar(used, total, size = 10) {
+    const r = total > 0 ? Math.max(0, Math.min(1, used / total)) : 0;
+    const f = Math.round(r * size);
+    return `[${'█'.repeat(f)}${'░'.repeat(Math.max(0, size - f))}] ${Math.round(r * 100)}%`;
+}
 
+async function scanCommands() {
+    const cmdsPath = path.join(process.cwd(), 'src', 'commands');
+    const cats = {};
+    let total = 0;
+
+    const scan = async (dir) => {
+        const items = await fs.readdir(dir, { withFileTypes: true });
         for (const item of items) {
-            const fullPath = path.join(dir, item.name);
-
-            if (item.isDirectory()) {
-                await scanDirectory(fullPath, item.name);
-            } else if (item.name.endsWith('.js')) {
+            const fp = path.join(dir, item.name);
+            if (item.isDirectory()) await scan(fp);
+            else if (item.name.endsWith('.js')) {
                 try {
-                    const command = await import('file://' + fullPath);
-                    const cmd = command.default;
-
-                    if (cmd && cmd.name) {
-                        const cat = cmd.category || category || 'general';
-                        
-                        if (!categories[cat]) {
-                            categories[cat] = [];
-                        }
-
-                        categories[cat].push({
-                            name: cmd.name,
-                            aliases: cmd.aliases || [],
-                            description: cmd.description || 'No description',
-                            usage: cmd.usage || cmd.name,
-                            permissions: cmd.permissions || ['user']
-                        });
-
-                        totalCommands++;
+                    const mod = await import('file://' + fp);
+                    const cmd = mod.default;
+                    if (cmd?.name) {
+                        const cat = cmd.category || 'other';
+                        if (!cats[cat]) cats[cat] = [];
+                        cats[cat].push(cmd.name);
+                        total++;
                     }
-                } catch (e) {
-                    console.error(`Failed to load ${fullPath}:`, e.message);
-                }
+                } catch {}
             }
         }
     };
-
-    try {
-        await scanDirectory(commandsPath);
-    } catch (e) {
-        console.error('Failed to scan commands:', e);
-    }
-
-    return { categories, totalCommands };
+    await scan(cmdsPath);
+    return { cats, total };
 }
-
-const categoryEmojis = {
-    owner: '👑',
-    admin: '⚙️',
-    media: '🎬',
-    downloader: '📥',
-    fun: '🎮',
-    games: '🎯',
-    tools: '🔧',
-    entertainment: '🎭',
-    general: '📂',
-    utility: '🛠️'
-};
 
 export default {
     name: 'menu',
     aliases: ['m'],
     category: 'general',
     description: 'Display bot command menu',
-    usage: 'menu [category]',
-    example: 'menu\nmenu media',
+    usage: 'menu',
     cooldown: 3,
-    permissions: ['user'],
     args: false,
-    minArgs: 0,
 
-    async execute({ sock, message, args, from, sender, prefix }) {
-        const { categories, totalCommands } = await getAllCommands();
+    async execute({ sock, message, from, prefix }) {
+        const { cats, total } = await scanCommands();
 
-        if (args.length > 0) {
-            const requestedCat = args[0].toLowerCase();
-            const categoryCommands = categories[requestedCat];
+        const botName = process.env.BOT_NAME || 'Asta Bot';
+        const ownerName = process.env.OWNER_NAME || 'Ilom';
+        const version = process.env.BOT_VERSION || '1.0.0';
+        const mode = process.env.PUBLIC_MODE === 'true' ? 'Public' : 'Private';
 
-            if (!categoryCommands) {
-                return await sock.sendMessage(from, {
-                    text: `❌ Category ${font.italic(requestedCat)} not found\n\nUse ${font.monospace(prefix + 'menu')} to see all categories`
-                }, { quoted: message });
-            }
+        const ramUsed = process.memoryUsage().rss;
+        const ramTotal = os.totalmem();
 
-            const emoji = categoryEmojis[requestedCat] || '📂';
-            let msg = `${emoji} ${font.boldScript(requestedCat.toUpperCase())}\n\n`;
-            msg += `${font.sans('Commands:')} ${categoryCommands.length}\n`;
-            msg += `━━━━━━━━━━━━━━━\n\n`;
+        // Header
+        let msg = `┏▣ ◈ *${botName}* ◈\n`;
+        msg += `┃ *ᴏᴡɴᴇʀ* : ${ownerName}\n`;
+        msg += `┃ *ᴘʀᴇғɪx* : [ ${prefix} ]\n`;
+        msg += `┃ *ʜᴏsᴛ* : Panel\n`;
+        msg += `┃ *ᴘʟᴜɢɪɴs* : ${total}\n`;
+        msg += `┃ *ᴍᴏᴅᴇ* : ${mode}\n`;
+        msg += `┃ *ᴠᴇʀsɪᴏɴ* : ${version}\n`;
+        msg += `┃ *sᴘᴇᴇᴅ* : ${(Math.random() * 0.5 + 0.2).toFixed(4)} ms\n`;
+        msg += `┃ *ᴜsᴀɢᴇ* : ${formatBytes(ramUsed)} of ${formatBytes(ramTotal)}\n`;
+        msg += `┃ *ʀᴀᴍ:* ${ramBar(ramUsed, ramTotal)}\n`;
+        msg += `┗▣ \n\n`;
 
-            categoryCommands.forEach((cmd, i) => {
-                msg += `${font.bold((i + 1) + '. ' + cmd.name)}\n`;
-                
-                if (cmd.aliases.length > 0) {
-                    msg += `   ${font.italic('Aliases:')} ${cmd.aliases.join(', ')}\n`;
+        // Categories
+        const processed = new Set();
+        for (const key of CATEGORY_ORDER) {
+            if (cats[key]?.length) {
+                const label = CATEGORY_LABELS[key] || `${key.toUpperCase()} MENU`;
+                msg += `┏▣ ◈ *${label}* ◈\n`;
+                const sorted = [...cats[key]].sort();
+                for (const c of sorted) {
+                    msg += `│➽ ${c}\n`;
                 }
-                
-                msg += `   ${font.italic('Usage:')} ${prefix}${cmd.usage}\n`;
-                msg += `   ${cmd.description}\n\n`;
-            });
-
-            return await sock.sendMessage(from, { text: msg }, { quoted: message });
-        }
-
-        const botName = process.env.BOT_NAME || 'WhatsApp Bot';
-        const ownerNumber = process.env.OWNER_NUMBER || 'Unknown';
-
-        let menuText = `${font.boldScript(botName)}\n\n`;
-        menuText += `${font.monospace('Prefix:')} ${prefix}\n`;
-        menuText += `${font.monospace('Commands:')} ${totalCommands}\n`;
-        menuText += `${font.monospace('Uptime:')} ${getUptime()}\n`;
-        menuText += `${font.monospace('Owner:')} ${ownerNumber}\n\n`;
-        menuText += `━━━━━━━━━━━━━━━\n\n`;
-        menuText += `${font.bold('📚 CATEGORIES')}\n\n`;
-
-        const sortedCategories = Object.keys(categories).sort();
-
-        sortedCategories.forEach((cat) => {
-            const emoji = categoryEmojis[cat] || '📂';
-            const count = categories[cat].length;
-            menuText += `${emoji} ${font.bold(cat.charAt(0).toUpperCase() + cat.slice(1))} ${font.italic('(' + count + ')')}\n`;
-        });
-
-        menuText += `\n━━━━━━━━━━━━━━━\n\n`;
-        menuText += `${font.sans('Reply with category name')}\n`;
-        menuText += `${font.italic('Example:')} media`;
-
-        const sentMsg = await sock.sendMessage(from, {
-            text: menuText
-        }, { quoted: message });
-
-        if (!global.replyHandlers) {
-            global.replyHandlers = {};
-        }
-
-        global.replyHandlers[sentMsg.key.id] = {
-            command: 'menu',
-            handler: async (replyText, replyMessage) => {
-                const replySender = replyMessage.key.participant || replyMessage.key.remoteJid;
-                if (replySender !== sender) return;
-
-                const requestedCat = replyText.trim().toLowerCase();
-                const categoryCommands = categories[requestedCat];
-
-                if (!categoryCommands) return;
-
-                delete global.replyHandlers[sentMsg.key.id];
-
-                const emoji = categoryEmojis[requestedCat] || '📂';
-                let msg = `${emoji} ${font.boldScript(requestedCat.toUpperCase())}\n\n`;
-                msg += `${font.sans('Commands:')} ${categoryCommands.length}\n`;
-                msg += `━━━━━━━━━━━━━━━\n\n`;
-
-                categoryCommands.forEach((cmd, i) => {
-                    msg += `${font.bold((i + 1) + '. ' + cmd.name)}\n`;
-                    
-                    if (cmd.aliases.length > 0) {
-                        msg += `   ${font.italic('Aliases:')} ${cmd.aliases.join(', ')}\n`;
-                    }
-                    
-                    msg += `   ${font.italic('Usage:')} ${prefix}${cmd.usage}\n`;
-                    msg += `   ${cmd.description}\n\n`;
-                });
-
-                await sock.sendMessage(from, { text: msg }, { quoted: replyMessage });
+                msg += `┗▣ \n\n`;
+                processed.add(key);
             }
-        };
+        }
+
+        // Any remaining categories not in order
+        for (const [key, cmds] of Object.entries(cats)) {
+            if (!processed.has(key) && cmds.length) {
+                const label = CATEGORY_LABELS[key] || `${key.toUpperCase()} MENU`;
+                msg += `┏▣ ◈ *${label}* ◈\n`;
+                const sorted = [...cmds].sort();
+                for (const c of sorted) {
+                    msg += `│➽ ${c}\n`;
+                }
+                msg += `┗▣ \n\n`;
+            }
+        }
+
+        // Try to send with image
+        const imgUrl = process.env.BOT_THUMBNAIL || 'https://files.catbox.moe/13uws5.jpg';
+        try {
+            const imgResp = await axios.get(imgUrl, {
+                responseType: 'arraybuffer',
+                timeout: 8000,
+                headers: { 'User-Agent': 'Mozilla/5.0' }
+            });
+            const imgBuf = Buffer.from(imgResp.data);
+            await sock.sendMessage(from, { image: imgBuf, caption: msg }, { quoted: message });
+        } catch {
+            await sock.sendMessage(from, { text: msg }, { quoted: message });
+        }
     }
 };

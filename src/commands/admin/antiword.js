@@ -22,6 +22,13 @@ export async function checkBadWord(sock, message) {
     if (!found) return false;
 
     try {
+        const meta = await sock.groupMetadata(from);
+        const normalizedSender = sender.split(':')[0].split('@')[0];
+        const participant = meta.participants.find(p => p.id.split(':')[0].split('@')[0] === normalizedSender);
+        if (participant?.admin) return false;
+    } catch {}
+
+    try {
         await sock.sendMessage(from, {
             delete: { remoteJid: from, id: message.key.id, fromMe: false, participant: sender }
         });

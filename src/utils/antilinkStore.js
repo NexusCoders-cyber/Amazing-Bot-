@@ -7,77 +7,36 @@ const memoryStore = new Map();
 
 const antilinkSchema = new mongoose.Schema({
     groupId: { type: String, required: true, unique: true },
-    enabled: { type: Boolean, default: false }
+    enabled: { type: Boolean, default: false },
+    mode: { type: String, enum: ['delete', 'kick', 'deletekick'], default: 'delete' }
 });
 
-function getModel() {
-    try { return mongoose.model('Antilink'); }
-    catch { return mongoose.model('Antilink', antilinkSchema); }
-}
+function getModel() { try { return mongoose.model('Antilink'); } catch { return mongoose.model('Antilink', antilinkSchema); } }
+const isDbConnected = () => mongoose.connection.readyState === 1;
+async function readJson() { try { await fs.ensureDir(path.dirname(DATA_FILE)); if (!await fs.pathExists(DATA_FILE)) return {}; return await fs.readJson(DATA_FILE);} catch { return {}; } }
+async function writeJson(data) { try { await fs.ensureDir(path.dirname(DATA_FILE)); await fs.writeJson(DATA_FILE, data, { spaces: 2 }); } catch {} }
 
-function isDbConnected() {
-    return mongoose.connection.readyState === 1;
-}
-
-async function readJson() {
-    try {
-        await fs.ensureDir(path.dirname(DATA_FILE));
-        if (!await fs.pathExists(DATA_FILE)) return {};
-        return await fs.readJson(DATA_FILE);
-    } catch { return {}; }
-}
-
-async function writeJson(data) {
-    try {
-        await fs.ensureDir(path.dirname(DATA_FILE));
-        await fs.writeJson(DATA_FILE, data, { spaces: 2 });
-    } catch {}
-}
+const normalizeCfg = (cfg) => ({ enabled: !!cfg?.enabled, mode: ['delete', 'kick', 'deletekick'].includes(cfg?.mode) ? cfg.mode : 'delete' });
 
 export async function getGroupAntilink(groupId) {
-    if (memoryStore.has(groupId)) {
-        return memoryStore.get(groupId) === true;
-    }
-
+    if (memoryStore.has(groupId)) return normalizeCfg(memoryStore.get(groupId));
     if (isDbConnected()) {
-        try {
-            const doc = await getModel().findOne({ groupId });
-            const enabled = doc?.enabled === true;
-            memoryStore.set(groupId, enabled);
-            return enabled;
-        } catch {}
+        try { const doc = await getModel().findOne({ groupId }); if (doc) { const cfg = normalizeCfg(doc); memoryStore.set(groupId, cfg); return cfg; } } catch {}
     }
-
-    try {
-        const data = await readJson();
-        const enabled = data[groupId] === true;
-        memoryStore.set(groupId, enabled);
-        return enabled;
-    } catch {}
-
-    memoryStore.set(groupId, false);
-    return false;
+    const data = await readJson();
+    const cfg = normalizeCfg(data[groupId] || { enabled: false, mode: 'delete' });
+    memoryStore.set(groupId, cfg);
+    return cfg;
 }
 
-export async function setGroupAntilink(groupId, enabled) {
-    memoryStore.set(groupId, enabled === true);
-
+export async function setGroupAntilink(groupId, enabled, mode = 'delete') {
+    const cfg = normalizeCfg({ enabled, mode });
+    memoryStore.set(groupId, cfg);
     if (isDbConnected()) {
-        try {
-            await getModel().findOneAndUpdate(
-                { groupId },
-                { $set: { enabled } },
-                { upsert: true, new: true }
-            );
-        } catch {}
+        try { await getModel().findOneAndUpdate({ groupId }, { $set: cfg }, { upsert: true, new: true }); } catch {}
     }
-
-    try {
-        const data = await readJson();
-        data[groupId] = enabled === true;
-        await writeJson(data);
-        return isDbConnected() ? 'db' : 'json';
-    } catch {}
-
-    return 'memory';
+    const data = await readJson();
+    data[groupId] = cfg;
+    await writeJson(data);
+    return isDbConnected() ? 'db' : 'json';
 }

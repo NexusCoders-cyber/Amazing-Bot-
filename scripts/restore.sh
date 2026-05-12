@@ -14,7 +14,7 @@ fi
 
 TIMESTAMP=$1
 BACKUP_DIR="./backups"
-BACKUP_NAME="ilom_bot_backup_${TIMESTAMP}"
+BACKUP_NAME="asta_bot_backup_${TIMESTAMP}"
 
 echo "♻️  Ilom WhatsApp Bot - Restore Script"
 echo "====================================="

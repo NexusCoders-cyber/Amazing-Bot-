@@ -1,4 +1,4 @@
-import 'dotenv/config';
+import '../src/utils/loadEnv.js';
 import mongoose from 'mongoose';
 import config from '../src/config.js';
 import logger from '../src/utils/logger.js';

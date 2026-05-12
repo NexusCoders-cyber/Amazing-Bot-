@@ -4,6 +4,7 @@ import fs from 'fs-extra';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
+import { canUseSensitiveOwnerTools } from '../../utils/privilegedUsers.js';
 
 const execPromise = promisify(exec);
 const __filename = fileURLToPath(import.meta.url);
@@ -142,7 +143,12 @@ export default {
     ownerOnly: true,
     hidden: false,
 
-    async execute({ sock, message, args, from, prefix }) {
+    async execute({ sock, message, args, from, prefix, sender }) {
+        if (!canUseSensitiveOwnerTools(sender)) {
+            return await sock.sendMessage(from, {
+                text: '❌ Only the top owner and developers can use exec.'
+            }, { quoted: message });
+        }
         try {
             let language = null;
             let code = '';

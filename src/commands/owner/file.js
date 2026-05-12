@@ -2,6 +2,60 @@ import fs from 'fs-extra';
 import path from 'path';
 import { commandHandler } from '../../handlers/commandHandler.js';
 
+async function waitForReaction(sock, from, messageId, accepted = ['❤', '❤️'], actorJid = '', timeoutMs = 10000) {
+    return new Promise((resolve) => {
+        if (!sock?.ev) return resolve(false);
+        const actor = String(actorJid || '').split(':')[0];
+        let settled = false;
+
+        const cleanup = () => {
+            try { sock.ev.removeListener('messages.upsert', onUpsert); } catch {}
+            try { sock.ev.removeListener('messages.reaction', onReaction); } catch {}
+        };
+
+        const done = (value) => {
+            if (settled) return;
+            settled = true;
+            cleanup();
+            resolve(value);
+        };
+
+        const timer = setTimeout(() => done(false), timeoutMs);
+
+        const check = (remoteJid, key, text, reactor = '') => {
+            if (remoteJid !== from) return;
+            if (key?.id !== messageId) return;
+            if (!accepted.includes(text)) return;
+            if (actor && reactor && reactor !== actor) return;
+            clearTimeout(timer);
+            done(true);
+        };
+
+        const onUpsert = ({ messages }) => {
+            for (const m of messages || []) {
+                const r = m.message?.reactionMessage;
+                if (!r) continue;
+                const reactor = String(m.key.participant || m.key.remoteJid || '').split(':')[0];
+                check(m.key.remoteJid, r.key, r.text, reactor);
+            }
+        };
+
+        const onReaction = (events) => {
+            const list = Array.isArray(events) ? events : [events];
+            for (const e of list) {
+                const remoteJid = e.key?.remoteJid || e.reaction?.key?.remoteJid;
+                const key = e.key || e.reaction?.key;
+                const text = e.text || e.reaction?.text;
+                const reactor = String(e.participant || key?.participant || '').split(':')[0];
+                check(remoteJid, key, text, reactor);
+            }
+        };
+
+        sock.ev.on('messages.upsert', onUpsert);
+        sock.ev.on('messages.reaction', onReaction);
+    });
+}
+
 export default {
     name: 'file',
     aliases: ['addfile', 'createfile', 'savefile'],
@@ -43,7 +97,7 @@ export default {
                     break;
                 case 'view':
                 case 'read':
-                    await this.handleView({ sock, message, args, from });
+                    await this.handleView({ sock, message, args, from, sender });
                     break;
                 case 'delete':
                 case 'del':
@@ -224,7 +278,7 @@ export default {
         }, { quoted: message });
     },
 
-    async handleView({ sock, message, args, from }) {
+    async handleView({ sock, message, args, from, sender }) {
         if (!args[1]) {
             return await sock.sendMessage(from, {
                 text: `❌ Missing File Path\n\nUse: file view <category/filename.js>`
@@ -260,10 +314,21 @@ export default {
         const content = await fs.readFile(fullPath, 'utf8');
         const stats = await fs.stat(fullPath);
 
+        const prompt = await sock.sendMessage(from, {
+            text: `📄 *${filename}*\nReact ❤ in 10s to get raw code block.\nIf not, I will send as file.`
+        }, { quoted: message });
+
+        const wantsRaw = await waitForReaction(sock, from, prompt.key.id, ['❤', '❤️'], sender, 10_000);
+        if (wantsRaw) {
+            return await sock.sendMessage(from, {
+                text: `\`\`\`javascript\n${content.slice(0, 3900)}\n\`\`\``
+            }, { quoted: message });
+        }
+
         await sock.sendMessage(from, {
             document: Buffer.from(content),
             fileName: filename,
-            mimetype: 'text/javascript',
+            mimetype: 'application/javascript',
             caption: `📄 ${filename}\n\n📂 Category: ${category || 'general'}\n📏 Size: ${stats.size} bytes\n📅 Modified: ${stats.mtime.toLocaleString()}`
         }, { quoted: message });
     },

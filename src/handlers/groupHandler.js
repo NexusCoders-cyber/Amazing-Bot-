@@ -5,6 +5,19 @@ import handleGroupLeave from '../events/groupLeave.js';
 import axios from 'axios';
 import { createPromoteImage, createDemoteImage } from '../utils/canvasUtils.js';
 import { normNum } from '../utils/adminUtils.js';
+import { isAntiOutEnabled } from '../utils/antioutStore.js';
+import { isAntiLeaveEnabled } from '../commands/admin/antileave.js';
+
+const antiOutLastAttempt = new Map();
+
+function shouldThrottleReadd(groupId, participant) {
+    const key = `${groupId}:${participant}`;
+    const now = Date.now();
+    const last = antiOutLastAttempt.get(key) || 0;
+    if (now - last < 10 * 60 * 1000) return true;
+    antiOutLastAttempt.set(key, now);
+    return false;
+}
 
 async function getProfilePicture(sock, jid) {
     try { return await sock.profilePictureUrl(jid, 'image'); }
@@ -35,6 +48,7 @@ class GroupHandler {
             } else if (action === 'remove' || action === 'leave') {
                 await handleGroupLeave(sock, groupUpdate);
                 this.updateStats(id, 'leaves', participants.length);
+                await this.handleAntiOut(sock, groupUpdate);
             } else if (action === 'promote') {
                 if (config.events?.groupPromote) {
                     await this.handleGroupPromote(sock, groupUpdate);
@@ -48,6 +62,45 @@ class GroupHandler {
             }
         } catch (error) {
             logger.error('Error handling participants update:', error);
+        }
+    }
+
+    async handleAntiOut(sock, groupUpdate) {
+        try {
+            const { id: groupId, participants = [], action, author } = groupUpdate;
+            if (!participants.length) return;
+
+            const enabled = await isAntiOutEnabled(groupId);
+            if (!enabled) {
+                // Check antileave toggle — re-add anyone who leaves
+                if (await isAntiLeaveEnabled(groupId)) {
+                    for (const participant of participants) {
+                        const isVoluntaryLeave = action === 'leave' || !author || author === participant;
+                        if (!isVoluntaryLeave) continue;
+                        await new Promise(r => setTimeout(r, 3000));
+                        await sock.groupParticipantsUpdate(groupId, [participant], 'add').catch(() => {});
+                    }
+                }
+                return;
+            }
+
+            const botJid = sock?.user?.id?.split(':')[0] || '';
+            const meta = await sock.groupMetadata(groupId).catch(() => null);
+            const botP = meta?.participants?.find((p) => String(p.id || '').split(':')[0] === botJid);
+            if (!botP?.admin) return;
+
+            for (const participant of participants) {
+                const isVoluntaryLeave = action === 'leave' || !author || author === participant;
+                if (!isVoluntaryLeave) continue;
+                if (shouldThrottleReadd(groupId, participant)) continue;
+
+                const waitMs = 3000 + Math.floor(Math.random() * 3000);
+                await new Promise((resolve) => setTimeout(resolve, waitMs));
+
+                await sock.groupParticipantsUpdate(groupId, [participant], 'add').catch(() => {});
+            }
+        } catch (error) {
+            logger.debug(`Antiout handling skipped: ${error.message}`);
         }
     }
 

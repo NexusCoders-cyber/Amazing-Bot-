@@ -36,10 +36,13 @@ export default {
                 text: `☁️ *Fetching Weather*: ${location}...`
             }, { quoted: message });
 
-            const response = await axios.get(`https://kaiz-apis.gleeze.com/api/weather?q=${encodeURIComponent(location)}&apikey=a0ebe80e-bf1a-4dbf-8d36-6935b1bfa5ea`, { timeout: 10000 });
-            const weatherData = response.data;
+            const response = await axios.get(`https://wttr.in/${encodeURIComponent(location)}?format=j1`, {
+                timeout: 15000,
+                headers: { 'User-Agent': 'curl/8.0.1' }
+            });
+            const current = response.data?.current_condition?.[0];
 
-            if (!weatherData || !weatherData.location) {
+            if (!current) {
                 await sock.sendMessage(from, { delete: processMessage.key });
                 await sock.sendMessage(from, {
                     text: `❌ *Error*\nNo weather data found for "${location}".\n\n💡 Try another location!`
@@ -47,12 +50,12 @@ export default {
                 return;
             }
 
-            const reply = `☁️ *Weather for ${weatherData.location}*\n\n` +
-                          `- *Temperature*: ${weatherData.temperature}°C\n` +
-                          `- *Condition*: ${weatherData.condition || 'N/A'}\n` +
-                          `- *Humidity*: ${weatherData.humidity || 'N/A'}%\n` +
-                          `- *Wind Speed*: ${weatherData.windSpeed || 'N/A'} km/h\n` +
-                          `- *Description*: ${weatherData.description || 'N/A'}\n`;
+            const reply = `☁️ *Weather for ${location}*\n\n` +
+                          `- *Temperature*: ${current.temp_C || 'N/A'}°C\n` +
+                          `- *Feels Like*: ${current.FeelsLikeC || 'N/A'}°C\n` +
+                          `- *Condition*: ${current.weatherDesc?.[0]?.value || 'N/A'}\n` +
+                          `- *Humidity*: ${current.humidity || 'N/A'}%\n` +
+                          `- *Wind Speed*: ${current.windspeedKmph || 'N/A'} km/h\n`;
 
             await sock.sendMessage(from, { delete: processMessage.key });
             await sock.sendMessage(from, { text: reply }, { quoted: message });

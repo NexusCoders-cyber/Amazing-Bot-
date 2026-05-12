@@ -108,7 +108,7 @@ export default {
             ctx.font = 'bold 18px Arial';
             ctx.fillStyle = 'rgba(138, 43, 226, 0.6)';
             ctx.textAlign = 'center';
-            ctx.fillText(`AUTHOR: ${config.botName || 'ILOM BOT'} | POWERED BY WHATSAPP BAILEYS | ALL RIGHTS RESERVED`, canvas.width / 2, canvas.height - 30);
+            ctx.fillText(`AUTHOR: ${config.botName || 'ASTA BOT'} | POWERED BY WHATSAPP BAILEYS | ALL RIGHTS RESERVED`, canvas.width / 2, canvas.height - 30);
 
             const buffer = canvas.toBuffer('image/png');
 

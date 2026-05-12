@@ -12,7 +12,7 @@ fi
 if command -v pm2 &> /dev/null; then
     echo "Using PM2 process manager..."
     pm2 start ecosystem.config.js
-    pm2 logs ilom-bot
+    pm2 logs asta-bot
 else
     echo "Using Node.js directly..."
     node index.js

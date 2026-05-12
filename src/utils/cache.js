@@ -87,6 +87,7 @@ class CacheManager {
 
     startStatsTracking() {
         setInterval(() => {
+            if (String(process.env.LOG_LEVEL || '').toLowerCase() !== 'verbose') return;
             const nodeStats = this.nodeCache.getStats();
             logger.verbose('Cache stats:', {
                 hits: this.stats.hits,

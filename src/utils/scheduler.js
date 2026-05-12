@@ -3,6 +3,7 @@ import EventEmitter from 'events';
 import logger from './logger.js';
 import { cache } from './cache.js';
 import config from '../config.js';
+import mongoose from 'mongoose';
 
 class TaskScheduler extends EventEmitter {
     constructor() {
@@ -401,6 +402,11 @@ class TaskScheduler extends EventEmitter {
 
     async checkPremiumExpiry() {
         try {
+            if (mongoose.connection.readyState !== 1) {
+                logger.warn('Skipping premium expiry check: database not connected yet');
+                return;
+            }
+
             const { User } = await import('../models/User.js');
             const expiredUsers = await User.find({
                 isPremium: true,

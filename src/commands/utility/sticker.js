@@ -1,5 +1,8 @@
 import { downloadContentFromMessage } from '@whiskeysockets/baileys';
 import pkg from 'wa-sticker-formatter';
+import fs from 'fs-extra';
+import os from 'os';
+import path from 'path';
 const { Sticker, StickerTypes } = pkg;
 
 async function downloadMedia(message, type) {
@@ -7,6 +10,19 @@ async function downloadMedia(message, type) {
     const chunks = [];
     for await (const chunk of stream) chunks.push(chunk);
     return Buffer.concat(chunks);
+}
+
+async function cleanupStickerTemp() {
+    const tmp = os.tmpdir();
+    const targets = ['wa-sticker-formatter', 'sticker', 'webp'];
+    try {
+        const entries = await fs.readdir(tmp);
+        for (const e of entries) {
+            if (targets.some(t => e.toLowerCase().includes(t))) {
+                await fs.remove(path.join(tmp, e)).catch(() => {});
+            }
+        }
+    } catch {}
 }
 
 export default {
@@ -41,7 +57,6 @@ export default {
             let isVideo = false;
 
             if (imageMsg) {
-                const msgToDownload = quoted?.imageMessage ? quoted : message.message;
                 mediaBuffer = await downloadMedia(imageMsg, 'image');
             } else {
                 if (videoMsg.seconds > 10) {
@@ -54,7 +69,7 @@ export default {
                 isVideo = true;
             }
 
-            const botName = process.env.BOT_NAME || 'Ilom Bot';
+            const botName = process.env.BOT_NAME || 'Asta Bot';
             const ownerName = process.env.OWNER_NAME || 'Ilom';
 
             const stickerOptions = {
@@ -77,6 +92,9 @@ export default {
             });
 
         } catch (error) {
+            if (/No space left on device|ENOSPC/i.test(error.message || '')) {
+                await cleanupStickerTemp();
+            }
             await sock.sendMessage(from, { delete: processingMsg.key });
             await sock.sendMessage(from, {
                 text: `Failed to create sticker: ${error.message}\nTry with a different image or video.`

@@ -1,4 +1,4 @@
-# ✅ ILOM BOT - ALL FIXES COMPLETED
+# ✅ ASTA BOT - ALL FIXES COMPLETED
 
 ## 🎯 Problem Identified
 The bot was not responding to user commands because WhatsApp now sends messages wrapped in ephemeral/viewOnce containers by default. The message handler was not unwrapping these containers, so command text never reached the prefix detection logic.
@@ -39,7 +39,7 @@ Implemented robust iterative unwrapping in `extractMessageContent()`:
 - Removed problematic Baileys patch dependency
 - Updated postinstall script
 - Converted static imports to dynamic imports in command files
-- Fixed branding to display "ILOM BOT" and "Powered by Raphael"
+- Fixed branding to display "ASTA BOT" and "Powered by Raphael"
 
 ## ✅ How It Works Now
 

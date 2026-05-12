@@ -76,6 +76,8 @@ export default {
     minArgs: 1,
 
     async execute({ sock, message, args, from, sender, prefix }) {
+        const normalize = (jid = '') => String(jid).replace(/@s\.whatsapp\.net|@c\.us|@lid|:\d+/g, '').replace(/[^0-9]/g, '');
+        const senderNum = normalize(sender);
         const query = args.join(' ').trim();
 
         await sock.sendMessage(from, {
@@ -191,7 +193,7 @@ export default {
             command: 'song',
             handler: async (replyText, replyMessage) => {
                 const replySender = replyMessage.key.participant || replyMessage.key.remoteJid;
-                if (replySender !== sender) return;
+                if (normalize(replySender) !== senderNum) return;
 
                 const choice = parseInt(replyText.trim());
                 if (isNaN(choice) || choice < 1 || choice > searchResults.length) {

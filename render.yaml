@@ -1,17 +1,11 @@
 services:
   - type: web
-    name: ilom-whatsapp-bot
-    runtime: node
-    plan: free
-    buildCommand: npm install --production=false
-    startCommand: npm start
-    healthCheckPath: /health
+    name: asta-bot
+    env: node
+    buildCommand: npm install
+    startCommand: node index.js
     envVars:
-      - key: NODE_ENV
-        value: production
       - key: PORT
         value: 5000
-      - key: PUBLIC_MODE
-        value: false
-      - key: DATABASE_ENABLED
-        value: false
+      - key: PREFIX
+        value: .

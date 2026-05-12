@@ -11,7 +11,8 @@ export default {
     permissions: ['user'],
 
     async execute({ sock, message, from }) {
-        const ownerNumber = config.ownerNumbers?.[0]?.split('@')[0] || process.env.OWNER_NUMBERS?.split(',')[0] || 'Not set';
+        const ownerNumberRaw = config.ownerNumbers?.[0]?.split('@')[0] || process.env.OWNER_NUMBERS?.split(',')[0] || '';
+        const ownerNumber = String(ownerNumberRaw || '').replace(/[^0-9]/g, '');
         const ownerName = config.ownerName || process.env.OWNER_NAME || 'Ilom';
         
         try {
@@ -53,7 +54,7 @@ export default {
                 caption: ownerText
             }, { quoted: message });
 
-            if (config.ownerNumbers?.[0]) {
+            if (ownerNumber) {
                 const ownerVcard = `BEGIN:VCARD
 VERSION:3.0
 FN:${ownerName} - Bot Developer
@@ -64,6 +65,7 @@ END:VCARD`;
                     contacts: {
                         displayName: `${ownerName} - Bot Developer`,
                         contacts: [{
+                            displayName: `${ownerName} - Bot Developer`,
                             vcard: ownerVcard
                         }]
                     }
@@ -160,7 +162,7 @@ END:VCARD`;
 
         await sock.sendMessage(from, { text: ownerText }, { quoted: message });
 
-        if (config.ownerNumbers?.[0]) {
+        if (ownerNumber) {
             const ownerVcard = `BEGIN:VCARD
 VERSION:3.0
 FN:${ownerName} - Bot Developer
@@ -171,6 +173,7 @@ END:VCARD`;
                 contacts: {
                     displayName: `${ownerName} - Bot Developer`,
                     contacts: [{
+                        displayName: `${ownerName} - Bot Developer`,
                         vcard: ownerVcard
                     }]
                 }

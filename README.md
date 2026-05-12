@@ -1,8 +1,8 @@
 <div align="center">
 
-# ✨ 🧠 AMAZING BOT 🧠 ✨
+# ✨ 🧠 ASTA BOT 🧠 ✨
 
-<img src="./attached_assets/stock_images/modern_technology_bo_69a427db.jpg" alt="Amazing Bot Banner" width="100%" style="border-radius: 15px; box-shadow: 0 8px 32px rgba(0,0,0,0.1); margin: 30px 0;">
+<img src="./attached_assets/stock_images/modern_technology_bo_69a427db.jpg" alt="Asta Bot Banner" width="100%" style="border-radius: 15px; box-shadow: 0 8px 32px rgba(0,0,0,0.1); margin: 30px 0;">
 
 <p align="center">
   <img src="https://readme-typing-svg.herokuapp.com?font=Fira+Code&weight=600&size=32&pause=1000&color=667EEA&center=true&vCenter=true&width=1000&height=80&lines=Welcome+to+Amazing+Bot!+%F0%9F%8E%89;Advanced+AI+Integration+%F0%9F%A4%96;Beautiful+Canvas+Graphics+%F0%9F%8E%A8;142%2B+Powerful+Commands+%E2%9A%A1;Professional+WhatsApp+Automation+%F0%9F%9A%80;Built+with+%E2%9D%A4%EF%B8%8F+by+Ilom" alt="Typing SVG" />
@@ -14,9 +14,9 @@
   <a href="https://nodejs.org/"><img src="https://img.shields.io/badge/Node.js-20+-339933.svg?style=for-the-badge&logo=node.js&logoColor=white" alt="Node.js"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-4285F4.svg?style=for-the-badge&logo=opensourceinitiative&logoColor=white" alt="License"></a>
   <a href="package.json"><img src="https://img.shields.io/badge/Version-1.0.0-FF6B6B.svg?style=for-the-badge&logo=v&logoColor=white" alt="Version"></a>
-  <a href="https://github.com/NexusCoders-cyber/Amazing-Bot-"><img src="https://img.shields.io/github/stars/NexusCoders-cyber/Amazing-Bot-?style=for-the-badge&logo=github&color=yellow" alt="Stars"></a>
-  <a href="https://github.com/NexusCoders-cyber/Amazing-Bot-"><img src="https://img.shields.io/github/forks/NexusCoders-cyber/Amazing-Bot-?style=for-the-badge&logo=github&color=orange" alt="Forks"></a>
-  <a href="https://github.com/NexusCoders-cyber/Amazing-Bot-/watchers"><img src="https://img.shields.io/github/watchers/NexusCoders-cyber/Amazing-Bot-?style=for-the-badge&logo=github&color=blue" alt="Watchers"></a>
+  <a href="https://github.com/NexusCoders-cyber/Asta-Bot-"><img src="https://img.shields.io/github/stars/NexusCoders-cyber/Asta-Bot-?style=for-the-badge&logo=github&color=yellow" alt="Stars"></a>
+  <a href="https://github.com/NexusCoders-cyber/Asta-Bot-"><img src="https://img.shields.io/github/forks/NexusCoders-cyber/Asta-Bot-?style=for-the-badge&logo=github&color=orange" alt="Forks"></a>
+  <a href="https://github.com/NexusCoders-cyber/Asta-Bot-/watchers"><img src="https://img.shields.io/github/watchers/NexusCoders-cyber/Asta-Bot-?style=for-the-badge&logo=github&color=blue" alt="Watchers"></a>
 </p>
 
 <h3>🎯 Built with ❤️ by <a href="https://ilom.tech">Ilom</a> | Powered by NexusCoders</h3>
@@ -136,7 +136,7 @@
 </a>
 </td>
 <td align="center" width="20%">
-<a href="https://replit.com/github/NexusCoders-cyber/Amazing-Bot-">
+<a href="https://replit.com/github/NexusCoders-cyber/Asta-Bot-">
 <img src="https://img.shields.io/badge/Deploy%20to-Replit-667eea?style=for-the-badge&logo=replit&logoColor=white" alt="Replit"><br>
 <b>🔧 Dev Mode</b><br>
 <sub>Instant Test</sub>
@@ -191,7 +191,7 @@
    SESSION_ID=your_session_id_here
    OWNER_NUMBERS=your_phone_number
    PREFIX=.
-   BOT_NAME=Amazing Bot
+   BOT_NAME=Asta Bot
    ```
 
 **5️⃣ Optional - Add MongoDB:**
@@ -284,7 +284,7 @@
 **2️⃣ Deploy Commands:**
    ```bash
    heroku login
-   heroku create amazing-bot-app
+   heroku create asta-bot-app
    git push heroku main
    ```
 
@@ -362,8 +362,8 @@
 ### Option 1: Automated Setup (Recommended)
 
 ```bash
-git clone https://github.com/NexusCoders-cyber/Amazing-Bot-.git
-cd Amazing-Bot-
+git clone https://github.com/NexusCoders-cyber/Asta-Bot-.git
+cd Asta-Bot-
 
 npm run setup
 ```
@@ -378,8 +378,8 @@ This will:
 ### Option 2: Manual Setup
 
 ```bash
-git clone https://github.com/NexusCoders-cyber/Amazing-Bot-.git
-cd Amazing-Bot-
+git clone https://github.com/NexusCoders-cyber/Asta-Bot-.git
+cd Asta-Bot-
 
 npm install
 
@@ -401,7 +401,7 @@ Create `.env` file with these required settings:
 SESSION_ID=Ilom~base64_encoded_session_here
 OWNER_NUMBERS=1234567890,9876543210
 PREFIX=.
-BOT_NAME=Amazing Bot
+BOT_NAME=Asta Bot
 
 MONGODB_URL=mongodb+srv://user:pass@cluster.mongodb.net/botdb
 DATABASE_ENABLED=true
@@ -1206,7 +1206,7 @@ Community Hub
 </a>
 </td>
 <td align="center" width="25%">
-<a href="https://github.com/NexusCoders-cyber/Amazing-Bot-/issues">
+<a href="https://github.com/NexusCoders-cyber/Asta-Bot-/issues">
 <img src="https://img.shields.io/badge/GitHub-Issues-181717?style=for-the-badge&logo=github&logoColor=white" alt="GitHub Issues"><br>
 <b>🐛 Report Bugs</b><br>
 Issue Tracker
@@ -1317,22 +1317,22 @@ Sample code & tutorials<br>
 
 <div align="center">
 
-<a href="https://github.com/NexusCoders-cyber/Amazing-Bot-">
+<a href="https://github.com/NexusCoders-cyber/Asta-Bot-">
   <img src="https://github-readme-stats.vercel.app/api?username=NexusCoders-cyber&show_icons=true&theme=radical&hide_border=true&bg_color=0D1117&title_color=667EEA&icon_color=667EEA" alt="GitHub Stats" width="48%"/>
 </a>
 
-<a href="https://github.com/NexusCoders-cyber/Amazing-Bot-">
+<a href="https://github.com/NexusCoders-cyber/Asta-Bot-">
   <img src="https://github-readme-streak-stats.herokuapp.com/?user=NexusCoders-cyber&theme=radical&hide_border=true&background=0D1117&stroke=667EEA&ring=667EEA&fire=FF6B6B&currStreakLabel=667EEA" alt="GitHub Streak" width="48%"/>
 </a>
 
 <img src="https://user-images.githubusercontent.com/73097560/115834477-dbab4500-a447-11eb-908a-139a6edaec5c.gif">
 
-<a href="https://github.com/NexusCoders-cyber/Amazing-Bot-">
+<a href="https://github.com/NexusCoders-cyber/Asta-Bot-">
   <img src="https://github-readme-stats.vercel.app/api/top-langs/?username=NexusCoders-cyber&layout=compact&theme=radical&hide_border=true&bg_color=0D1117&title_color=667EEA" alt="Top Languages" width="48%"/>
 </a>
 
-<a href="https://github.com/NexusCoders-cyber/Amazing-Bot-/graphs/contributors">
-  <img src="https://contrib.rocks/image?repo=NexusCoders-cyber/Amazing-Bot-&max=500&columns=20&anon=1" alt="Contributors" width="48%"/>
+<a href="https://github.com/NexusCoders-cyber/Asta-Bot-/graphs/contributors">
+  <img src="https://contrib.rocks/image?repo=NexusCoders-cyber/Asta-Bot-&max=500&columns=20&anon=1" alt="Contributors" width="48%"/>
 </a>
 
 </div>
@@ -1521,17 +1521,17 @@ Found a security issue? Please report it responsibly!
 
 <img src="https://media.giphy.com/media/3o7abldj0b3rxrZUxW/giphy.gif" width="300" alt="Thank You">
 
-### 🌟 Thank You for Using Amazing Bot! 🌟
+### 🌟 Thank You for Using Asta Bot! 🌟
 
 <p>
-<a href="https://github.com/NexusCoders-cyber/Amazing-Bot-/stargazers">
-<img src="https://img.shields.io/github/stars/NexusCoders-cyber/Amazing-Bot-?style=social" alt="GitHub Stars">
+<a href="https://github.com/NexusCoders-cyber/Asta-Bot-/stargazers">
+<img src="https://img.shields.io/github/stars/NexusCoders-cyber/Asta-Bot-?style=social" alt="GitHub Stars">
 </a>
-<a href="https://github.com/NexusCoders-cyber/Amazing-Bot-/network/members">
-<img src="https://img.shields.io/github/forks/NexusCoders-cyber/Amazing-Bot-?style=social" alt="GitHub Forks">
+<a href="https://github.com/NexusCoders-cyber/Asta-Bot-/network/members">
+<img src="https://img.shields.io/github/forks/NexusCoders-cyber/Asta-Bot-?style=social" alt="GitHub Forks">
 </a>
-<a href="https://github.com/NexusCoders-cyber/Amazing-Bot-/watchers">
-<img src="https://img.shields.io/github/watchers/NexusCoders-cyber/Amazing-Bot-?style=social" alt="GitHub Watchers">
+<a href="https://github.com/NexusCoders-cyber/Asta-Bot-/watchers">
+<img src="https://img.shields.io/github/watchers/NexusCoders-cyber/Asta-Bot-?style=social" alt="GitHub Watchers">
 </a>
 </p>
 
@@ -1555,7 +1555,7 @@ Found a security issue? Please report it responsibly!
 </p>
 
 <p>
-<b>© 2024-2025 Amazing Bot. All Rights Reserved.</b>
+<b>© 2024-2025 Asta Bot. All Rights Reserved.</b>
 </p>
 
 <img src="https://user-images.githubusercontent.com/73097560/115834477-dbab4500-a447-11eb-908a-139a6edaec5c.gif">

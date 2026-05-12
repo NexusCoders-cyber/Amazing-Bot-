@@ -1,69 +1,45 @@
+import { disableWatch, formatWatchConfig, parseWatchArgs, setWatchConfig } from '../../utils/messageWatchStore.js';
+
+const USAGE = `*Usage Examples:*
+- delete g - Send deleted messages in the same chat
+- delete p - Send deleted messages to your chat/sudo
+- delete g pm - Same chat, only personal messages
+- delete g gm - Same chat, only group messages
+- delete p no-gm - To sudo, exclude groups
+- delete p no-pm - To sudo, exclude personal chats
+- delete <jid> - Send to a specific JID
+- delete <jid> gm - To JID, only groups
+- delete off - Disable anti-delete
+
+*Scopes:* pm, gm, no-pm, no-gm`;
+
 export default {
     name: 'delete',
-    aliases: ['del', 'remove'],
+    aliases: ['antidelete', 'delwatch'],
     category: 'admin',
-    description: 'Delete bot messages or user messages',
-    usage: 'delete [reply to message]',
-    example: 'delete (reply to a message)',
+    description: 'Configure anti-delete forwarding destination and scope',
+    usage: 'delete <g|p|jid|off> [scope]',
     cooldown: 2,
-    permissions: ['admin'],
-    groupOnly: false,
-    adminOnly: false,
-    botAdminRequired: false,
 
-    async execute({ sock, message, from, sender, isGroup, isGroupAdmin, isOwner, isSudo }) {
-        try {
-            const quotedMessage = message.message?.extendedTextMessage?.contextInfo?.quotedMessage;
-            const stanzaId = message.message?.extendedTextMessage?.contextInfo?.stanzaId;
-            const participant = message.message?.extendedTextMessage?.contextInfo?.participant;
+    async execute({ sock, message, from, args }) {
+        const parsed = parseWatchArgs(args);
 
-            if (!quotedMessage || !stanzaId) {
-                return await sock.sendMessage(from, {
-                    text: '❌ Please reply to a message to delete it'
-                }, { quoted: message });
-            }
-
-            const botJid = sock.user?.id.split(':')[0] + '@s.whatsapp.net';
-            const isOwnMessage = participant === botJid || message.message?.extendedTextMessage?.contextInfo?.fromMe;
-            const isUserMessage = participant === sender;
-
-            if (!isOwnMessage && !isUserMessage && !isGroupAdmin && !isOwner && !isSudo) {
-                return await sock.sendMessage(from, {
-                    text: '❌ You can only delete your own messages or bot messages'
-                }, { quoted: message });
-            }
-
-            if (isGroup && !isOwnMessage && !isGroupAdmin && !isOwner && !isSudo) {
-                return await sock.sendMessage(from, {
-                    text: '❌ Only admins can delete other users messages'
-                }, { quoted: message });
-            }
-
-            await sock.sendMessage(from, {
-                delete: {
-                    remoteJid: from,
-                    fromMe: isOwnMessage,
-                    id: stanzaId,
-                    participant: participant
-                }
-            });
-
-            const confirmMsg = await sock.sendMessage(from, {
-                text: '✅ Message deleted successfully'
-            }, { quoted: message });
-
-            setTimeout(async () => {
-                try {
-                    await sock.sendMessage(from, {
-                        delete: confirmMsg.key
-                    });
-                } catch (e) {}
-            }, 3000);
-
-        } catch (error) {
-            await sock.sendMessage(from, {
-                text: `❌ Failed to delete message\n\nError: ${error.message}`
-            }, { quoted: message });
+        if (parsed.error === 'missing') {
+            return sock.sendMessage(from, { text: `🗑️ *Anti-Delete Config*\n\n${formatWatchConfig('antidelete')}\n\n${USAGE}` }, { quoted: message });
         }
+
+        if (parsed.error === 'invalid') {
+            return sock.sendMessage(from, { text: `❌ Invalid option.\n\n${USAGE}` }, { quoted: message });
+        }
+
+        if (parsed.off) {
+            disableWatch('antidelete');
+            return sock.sendMessage(from, { text: '✅ Anti-delete disabled.' }, { quoted: message });
+        }
+
+        setWatchConfig('antidelete', parsed);
+        return sock.sendMessage(from, {
+            text: `✅ Anti-delete enabled.\n\n${formatWatchConfig('antidelete')}`
+        }, { quoted: message });
     }
 };

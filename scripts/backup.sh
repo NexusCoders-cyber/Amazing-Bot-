@@ -4,7 +4,7 @@ set -e
 
 BACKUP_DIR="./backups"
 TIMESTAMP=$(date +%Y%m%d_%H%M%S)
-BACKUP_NAME="ilom_bot_backup_${TIMESTAMP}"
+BACKUP_NAME="asta_bot_backup_${TIMESTAMP}"
 
 echo "💾 Ilom WhatsApp Bot - Backup Script"
 echo "===================================="

@@ -1,0 +1,61 @@
+export default {
+    name: 'lab',
+    aliases: ['labmenu', 'devmenu'],
+    category: 'utility',
+    description: 'Show LAB tools menu',
+    usage: 'lab',
+    cooldown: 3,
+
+    async execute({ sock, message, from, prefix }) {
+        const p = prefix || '.';
+        const text = [
+            '┏❐ 《 *💻 LAʙ ᴍᴇɴᴜ* 》 ❐',
+            '┃',
+            '┣◆ 🔢 ᴛᴏᴛᴀʟ: *35 tools*',
+            `┣◆ ⚡ ᴘʀᴇꜰɪx: *${p}*`,
+            '┃',
+            `┣◆ 🕷️ *${p}scrape*`,
+            '┣◆ 🔍 *' + p + 'whois*',
+            '┣◆ 🌐 *' + p + 'dns*',
+            '┣◆ 🗺️ *' + p + 'ipinfo*',
+            '┣◆ 📋 *' + p + 'headers*',
+            '┣◆ 📡 *' + p + 'webstatus*',
+            '┣◆ 🔒 *' + p + 'ssl*',
+            '┣◆ 🪙 *' + p + 'jwt*',
+            '┣◆ 🔤 *' + p + 'b64*',
+            '┣◆ #️⃣ *' + p + 'hash*',
+            '┣◆ 📄 *' + p + 'jsonformat*',
+            '┣◆ 🧩 *' + p + 'regex*',
+            '┣◆ 🔌 *' + p + 'portscan*',
+            '┣◆ 🏓 *' + p + 'netping*',
+            '┣◆ 📨 *' + p + 'curl*',
+            '┣◆ 🏠 *' + p + 'hosting*',
+            '┣◆ 🗒️ *' + p + 'pageinfo*',
+            '┣◆ 🤖 *' + p + 'robots*',
+            '┣◆ 🗺️ *' + p + 'sitemap*',
+            '┣◆ 🧱 *' + p + 'techstack*',
+            '┣◆ 🔗 *' + p + 'urlshort*',
+            '┣◆ ⬛ *' + p + 'qrgen*',
+            '┣◆ 🔏 *' + p + 'urlencode*',
+            '┣◆ 🎨 *' + p + 'colorconvert*',
+            '┣◆ 📦 *' + p + 'minify*',
+            '┣◆ ⏱️ *' + p + 'timestamp*',
+            '┣◆ 🆔 *' + p + 'uuid*',
+            '┣◆ 🛡️ *' + p + 'passgen*',
+            '┣◆ 🕰️ *' + p + 'cron*',
+            '┣◆ 🌍 *' + p + 'myip*',
+            '┣◆ 🧪 *' + p + 'apitest*',
+            '┣◆ ✅ *' + p + 'domainavail*',
+            '┣◆ 🌲 *' + p + 'subdomains*',
+            '┣◆ ▶️ *' + p + 'coderun*',
+            '┣◆ 📝 *' + p + 'lorem*',
+            '┃',
+            `┣◆ 💡 ᴛʏᴘᴇ *${p}devhelp <cmd>* ꜰᴏʀ ᴜꜱᴀɢᴇ ɪɴꜰᴏ`,
+            '┗❐',
+            '',
+            '> *ᴘᴏᴡᴇʀᴇᴅ ʙʏ ILOM MD BOT* 🐍'
+        ].join('\n');
+
+        return sock.sendMessage(from, { text }, { quoted: message });
+    }
+};

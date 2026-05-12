@@ -1,7 +1,7 @@
 module.exports = {
   apps: [
     {
-      name: 'ilom-bot',
+      name: 'asta-bot',
       script: 'index.js',
       instances: 1,
       exec_mode: 'fork',
@@ -53,7 +53,7 @@ module.exports = {
       host: ['your-server-ip'],
       ref: 'origin/main',
       repo: 'https://github.com/',
-      path: '/home/ubuntu/ilom-bot',
+      path: '/home/ubuntu/asta-bot',
       'pre-deploy-local': '',
       'post-deploy': 'npm install && npm run migrate && pm2 reload ecosystem.config.js --env production',
       'pre-setup': 'apt update && apt install nodejs npm mongodb redis-server -y',
@@ -64,7 +64,7 @@ module.exports = {
       host: ['staging-server-ip'],
       ref: 'origin/develop',
       repo: 'https://github.com/ilom-tech/whatsapp-bot.git',
-      path: '/home/ubuntu/ilom-bot-staging',
+      path: '/home/ubuntu/asta-bot-staging',
       'post-deploy': 'npm install && pm2 reload ecosystem.config.js --env staging'
     }
   }

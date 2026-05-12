@@ -1,6 +1,7 @@
 import config from '../../config.js';
 import fs from 'fs-extra';
 import path from 'path';
+import { resolveJidFromMentionOrReply } from '../../utils/jidResolver.js';
 
 const SUDO_FILE = path.join(process.cwd(), 'cache', 'sudoers.json');
 
@@ -113,17 +114,8 @@ Use \`.sudo add @user\` to add admins.
                 }, { quoted: message });
             }
 
-            const mentionedUsers = message.message?.extendedTextMessage?.contextInfo?.mentionedJid || [];
-            const quotedMsg = message.message?.extendedTextMessage?.contextInfo?.quotedMessage;
-            const quotedParticipant = message.message?.extendedTextMessage?.contextInfo?.participant;
-            
-            let targetJid = null;
-            
-            if (quotedMsg && quotedParticipant) {
-                targetJid = quotedParticipant;
-            } else if (mentionedUsers.length > 0) {
-                targetJid = mentionedUsers[0];
-            } else {
+            const targetJid = await resolveJidFromMentionOrReply({ sock, message, from });
+            if (!targetJid) {
                 return await sock.sendMessage(from, {
                     text: `❌ *No User Specified*
 
@@ -138,6 +130,11 @@ Please specify a user by:
             }
 
             const targetNumber = targetJid.replace(/@s\.whatsapp\.net|@c\.us|@lid|:\d+/g, '').split(':')[0].split('@')[0].trim();
+            if (!targetNumber || targetNumber.length < 7) {
+                return await sock.sendMessage(from, {
+                    text: `❌ *Unable to Resolve User*\n\nCould not resolve this LID user to a phone-based WhatsApp JID. Try mentioning the user inside a group where the bot can read participants.`
+                }, { quoted: message });
+            }
             const normalizedJid = `${targetNumber}@s.whatsapp.net`;
 
             if (action === 'add') {

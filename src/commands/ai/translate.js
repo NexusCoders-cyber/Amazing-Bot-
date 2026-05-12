@@ -3,8 +3,8 @@ import config from '../../config.js';
 
 
 export default {
-    name: 'translate',
-    aliases: ['tr', 'trans', 'lang'],
+    name: 'aitranslate',
+    aliases: ['aitr', 'ailang'],
     category: 'ai',
     description: 'Translate text between different languages using AI',
     usage: 'translate [target_language] [text] or reply to message',

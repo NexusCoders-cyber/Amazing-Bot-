@@ -3,6 +3,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
 import logger from './logger.js';
+import AXIS_ALIAS_MAP from './axisAliasMap.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -12,6 +13,7 @@ class CommandManager {
         this.loadedCommands = new Map();
         this.commandCategories = new Map();
         this.aliases = new Map();
+        this.externalAliases = new Map(Object.entries(AXIS_ALIAS_MAP));
         this.disabledCommands = new Set();
         this.commandUsage = new Map();
         this.isInitialized = false;
@@ -72,7 +74,12 @@ class CommandManager {
             const command = commandModule.default;
 
             if (!command?.name || typeof command?.execute !== 'function') {
-                logger.warn(`Invalid command structure: ${filename}`);
+                const hasNamedExports = Object.keys(commandModule || {}).some((k) => k !== 'default');
+                if (hasNamedExports) {
+                    logger.debug(`Skipping helper module in commands directory: ${filename}`);
+                } else {
+                    logger.warn(`Invalid command structure: ${filename}`);
+                }
                 return false;
             }
 
@@ -147,7 +154,11 @@ class CommandManager {
 
     getCommand(name) {
         if (!name) return null;
-        return this.loadedCommands.get(name) || this.loadedCommands.get(this.aliases.get(name)) || null;
+        const mapped = this.externalAliases.get(name);
+        return this.loadedCommands.get(name)
+            || this.loadedCommands.get(this.aliases.get(name))
+            || this.loadedCommands.get(mapped)
+            || null;
     }
 
     getCommandsByCategory(category) {
@@ -250,3 +261,5 @@ export const searchCommands = (query) => commandManager.searchCommands(query);
 export const getSystemStats = () => commandManager.getSystemStats();
 export const recordCommandUsage = (name, time, success) => commandManager.recordCommandUsage(name, time, success);
 export const getTopCommands = (limit) => commandManager.getTopCommands(limit);
+
+export default commandManager;

@@ -189,9 +189,7 @@ class AIService {
 
             let response = null;
 
-            if (config.apis.openai.apiKey && Math.random() < 0.7) {
-                response = await this.getChatGPTResponse(cleanPrompt, user, context);
-            } else if (config.apis.gemini.apiKey) {
+            if (config.apis.gemini.apiKey) {
                 response = await this.getGeminiResponse(cleanPrompt, user, context);
             }
 
@@ -212,7 +210,7 @@ class AIService {
         
         const systemMessage = {
             role: 'system',
-            content: `You are Ilom Bot, a helpful WhatsApp assistant created by Ilom. You are friendly, knowledgeable, and concise. Keep responses under 200 words. Current time: ${new Date().toLocaleString()}`
+            content: `You are Asta Bot, a helpful WhatsApp assistant created by Ilom. You are friendly, knowledgeable, and concise. Keep responses under 200 words. Current time: ${new Date().toLocaleString()}`
         };
 
         const messages = [systemMessage];
@@ -230,7 +228,7 @@ class AIService {
     }
 
     buildGeminiPrompt(prompt, user, context) {
-        const systemInfo = `You are Ilom Bot, a helpful WhatsApp assistant. Be friendly and concise.`;
+        const systemInfo = `You are Asta Bot, a helpful WhatsApp assistant. Be friendly and concise.`;
         const userInfo = user ? `User: ${user.name || 'User'}` : '';
         const contextInfo = context.isGroup ? 'This is a group chat.' : 'This is a private chat.';
         

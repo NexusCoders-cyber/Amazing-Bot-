@@ -1,7 +1,7 @@
 version: '3.8'
 
 services:
-  ilom-bot:
+  asta-bot:
     build: .
     container_name: ilom-whatsapp-bot
     restart: unless-stopped
@@ -75,7 +75,7 @@ services:
       - ./config/nginx.conf:/etc/nginx/nginx.conf:ro
       - ./ssl:/etc/nginx/ssl:ro
     depends_on:
-      - ilom-bot
+      - asta-bot
     networks:
       - ilom-network
 

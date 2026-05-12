@@ -1,4 +1,5 @@
 import config from '../../config.js';
+import { getSessionControl, toPhoneJid } from '../../utils/sessionControl.js';
 
 export default {
     name: 'listsudo',
@@ -11,12 +12,12 @@ export default {
     
     async execute({ sock, message, from }) {
         try {
+            const sessionControl = await getSessionControl(sock);
             let listText = '👑 *BOT OWNERS & SUDO ADMINS*\n\n';
             
             listText += '╭──⦿【 👑 PRIMARY OWNERS 】\n';
-            if (config.ownerNumbers && config.ownerNumbers.length > 0) {
-                config.ownerNumbers.forEach((jid, index) => {
-                    const number = jid.split('@')[0];
+            if (sessionControl.owners && sessionControl.owners.length > 0) {
+                sessionControl.owners.forEach((number, index) => {
                     listText += `│ ${index + 1}. @${number}\n`;
                 });
             } else {
@@ -25,9 +26,8 @@ export default {
             listText += '╰────────⦿\n\n';
             
             listText += '╭──⦿【 🔐 SUDO ADMINS 】\n';
-            if (config.sudoers && config.sudoers.length > 0) {
-                config.sudoers.forEach((jid, index) => {
-                    const number = jid.split('@')[0];
+            if (sessionControl.sudoers && sessionControl.sudoers.length > 0) {
+                sessionControl.sudoers.forEach((number, index) => {
                     listText += `│ ${index + 1}. @${number}\n`;
                 });
             } else {
@@ -43,8 +43,8 @@ export default {
             listText += '• .removesudo @user - Remove sudo admin';
             
             const allMentions = [
-                ...(config.ownerNumbers || []),
-                ...(config.sudoers || [])
+                ...(sessionControl.owners || []).map(toPhoneJid),
+                ...(sessionControl.sudoers || []).map(toPhoneJid)
             ];
             
             await sock.sendMessage(from, {

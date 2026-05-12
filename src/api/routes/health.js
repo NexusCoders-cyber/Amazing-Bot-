@@ -24,7 +24,7 @@ router.get('/', async (req, res) => {
             version: config.version || '1.0.0',
             environment: process.env.NODE_ENV || 'development',
             bot: {
-                name: config.botName || 'Ilom Bot',
+                name: config.botName || 'Asta Bot',
                 connected: !!global.sock,
                 sessionValid: await checkSessionHealth()
             },

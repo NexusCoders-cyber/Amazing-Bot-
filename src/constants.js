@@ -1,7 +1,7 @@
 const BOT_VERSION = '1.0.0';
-const BOT_NAME = 'Ilom Bot';
+const BOT_NAME = 'Asta Bot';
 const BOT_AUTHOR = 'Ilom';
-const BOT_DESCRIPTION = '🧠 Amazing Bot 🧠 v1 created by Ilom';
+const BOT_DESCRIPTION = '🧠 Asta Bot 🧠 v1 created by Ilom';
 
 const MESSAGE_TYPES = {
     TEXT: 'text',

@@ -93,7 +93,7 @@ HOST=0.0.0.0                     # Server host (required for Replit)
 
 #### Bot Configuration
 ```env
-BOT_NAME=Ilom Bot                # Custom bot name
+BOT_NAME=Asta Bot                # Custom bot name
 PREFIX=.                         # Command prefix
 PUBLIC_MODE=true                 # Allow public usage
 MARK_ONLINE=true                 # Show online status

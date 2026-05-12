@@ -36,8 +36,9 @@ export function botJid(sock) {
 }
 
 export function getTarget(message) {
-    const mentioned = message.message?.extendedTextMessage?.contextInfo?.mentionedJid || [];
-    const replied = message.message?.extendedTextMessage?.contextInfo?.participant;
+    const ctx = message?.message?.extendedTextMessage?.contextInfo || message?.message?.imageMessage?.contextInfo || message?.message?.videoMessage?.contextInfo || {};
+    const mentioned = Array.isArray(ctx?.mentionedJid) ? ctx.mentionedJid : [];
+    const replied = ctx?.participant || ctx?.remoteJid || '';
     return replied || mentioned[0] || null;
 }
 

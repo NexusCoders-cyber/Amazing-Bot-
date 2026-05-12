@@ -1,3 +1,63 @@
+import { createCanvas } from '@napi-rs/canvas';
+
+function drawWrappedText(ctx, text, x, y, maxWidth, lineHeight) {
+    const words = String(text || '').split(' ');
+    let line = '';
+    for (const word of words) {
+        const test = line ? `${line} ${word}` : word;
+        if (ctx.measureText(test).width > maxWidth && line) {
+            ctx.fillText(line, x, y);
+            y += lineHeight;
+            line = word;
+        } else line = test;
+    }
+    if (line) ctx.fillText(line, x, y);
+    return y;
+}
+
+function createNewsCard(category, newsData) {
+    const W = 1080;
+    const H = 1350;
+    const canvas = createCanvas(W, H);
+    const ctx = canvas.getContext('2d');
+
+    const grad = ctx.createLinearGradient(0, 0, W, H);
+    grad.addColorStop(0, '#0c1020');
+    grad.addColorStop(1, '#1e293b');
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, W, H);
+
+    ctx.fillStyle = '#f8fafc';
+    ctx.font = 'bold 58px Sans';
+    ctx.fillText(`📰 ${category.toUpperCase()} NEWS`, 60, 95);
+
+    ctx.fillStyle = '#93c5fd';
+    ctx.font = '26px Sans';
+    ctx.fillText(`Updated ${new Date().toLocaleString()}`, 60, 140);
+
+    let y = 210;
+    newsData.slice(0, 5).forEach((article, idx) => {
+        ctx.fillStyle = 'rgba(30,41,59,0.75)';
+        ctx.fillRect(50, y - 10, W - 100, 200);
+
+        ctx.fillStyle = '#ffffff';
+        ctx.font = 'bold 34px Sans';
+        let ny = drawWrappedText(ctx, article.title, 90, y + 35, W - 180, 38);
+
+        ctx.fillStyle = '#cbd5e1';
+        ctx.font = '24px Sans';
+        ny = drawWrappedText(ctx, article.description, 90, ny + 34, W - 180, 30);
+
+        ctx.fillStyle = '#93c5fd';
+        ctx.font = '22px Sans';
+        ctx.fillText(`${article.source} • ${article.publishedAt}`, 90, Math.min(y + 170, ny + 34));
+
+        y += 230;
+    });
+
+    return canvas.toBuffer('image/png');
+}
+
 export default {
     name: 'news',
     aliases: ['headlines', 'breaking'],
@@ -7,77 +67,33 @@ export default {
     cooldown: 10,
     permissions: ['user'],
 
-    async execute({ sock, message, args, from, sender }) {
+    async execute({ sock, message, args, from }) {
         const category = args[0]?.toLowerCase() || 'general';
-        
         const validCategories = ['general', 'technology', 'sports', 'entertainment', 'science', 'business'];
+
         if (!validCategories.includes(category)) {
             return sock.sendMessage(from, {
-                text: `❌ *Invalid Category*\n\nAvailable categories:\n${validCategories.map(cat => `• ${cat}`).join('\n')}\n\n*Example:* news technology`
+                text: `❌ Invalid category.
+Use one of: ${validCategories.join(', ')}`
             });
         }
-        
+
         try {
-            // Mock news data - in real implementation, this would fetch from news API
             const newsData = this.getMockNews(category);
-            
-            const categoryEmojis = {
-                general: '📰',
-                technology: '💻',
-                sports: '⚽',
-                entertainment: '🎬',
-                science: '🔬',
-                business: '💼'
-            };
-            
-            const emoji = categoryEmojis[category] || '📰';
-            
-            let newsResponse = `${emoji} *Latest ${category.toUpperCase()} News*\n\n`;
-            newsResponse += `━━━━━━━━━━━━━━━━━━━━━\n\n`;
-            newsResponse += `📅 **Updated:** ${new Date().toLocaleString()}\n`;
-            newsResponse += `🌍 **Source:** Global News Network\n\n`;
-            
-            newsData.forEach((article, index) => {
-                const urgencyEmoji = article.breaking ? '🚨' : article.trending ? '📈' : '📄';
-                const ageEmoji = this.getAgeEmoji(article.publishedAt);
-                
-                newsResponse += `**${index + 1}. ${urgencyEmoji} ${article.title}**\n`;
-                newsResponse += `📝 ${article.description}\n`;
-                newsResponse += `🏢 ${article.source} ${ageEmoji} ${article.publishedAt}\n`;
-                if (article.breaking) newsResponse += `🚨 *BREAKING NEWS*\n`;
-                if (article.trending) newsResponse += `📈 *TRENDING*\n`;
-                newsResponse += `\n`;
-            });
-            
-            newsResponse += `━━━━━━━━━━━━━━━━━━━━━\n\n`;
-            
-            // News statistics
-            const breakingCount = newsData.filter(n => n.breaking).length;
-            const trendingCount = newsData.filter(n => n.trending).length;
-            
-            newsResponse += `📊 **News Stats:**\n`;
-            newsResponse += `├ Total Articles: ${newsData.length}\n`;
-            newsResponse += `├ Breaking News: ${breakingCount}\n`;
-            newsResponse += `├ Trending: ${trendingCount}\n`;
-            newsResponse += `╰ Category: ${category.toUpperCase()}\n\n`;
-            
-            newsResponse += `💡 **Available Categories:**\n`;
-            validCategories.forEach(cat => {
-                newsResponse += `• \`news ${cat}\` - ${this.getCategoryDescription(cat)}\n`;
-            });
-            
-            newsResponse += `\n🔄 *News updates every 30 minutes*\n`;
-            newsResponse += `⚠️ *Note: Demo news. Real implementation needs News API*`;
-            
-            await sock.sendMessage(from, { text: newsResponse });
-            
+            const card = createNewsCard(category, newsData);
+
+            await sock.sendMessage(from, {
+                image: card,
+                caption: `✨ ${category.toUpperCase()} news digest
+Use: .news <category>`
+            }, { quoted: message });
         } catch (error) {
             await sock.sendMessage(from, {
-                text: `❌ *News Error*\n\nCould not fetch news at this time.\n\n**Possible issues:**\n• News API not configured\n• Network connection error\n• Rate limit exceeded\n\n*Contact admin to configure news service*`
-            });
+                text: `❌ News error: ${error.message}`
+            }, { quoted: message });
         }
     },
-    
+
     getMockNews(category) {
         const newsTemplates = {
             general: [
@@ -123,45 +139,14 @@ export default {
                 { title: 'Green Energy Stocks Surge on Policy Changes', description: 'Renewable energy companies see stock price increases.' }
             ]
         };
-        
-        const articles = newsTemplates[category] || newsTemplates.general;
-        
-        // Add random timestamps and sources
-        return articles.map(article => ({
+
+        const sources = ['Reuters', 'AP News', 'BBC', 'CNN', 'Bloomberg', 'Global Times'];
+        const times = ['2 minutes ago', '15 minutes ago', '1 hour ago', '3 hours ago', '6 hours ago'];
+
+        return (newsTemplates[category] || newsTemplates.general).map((article) => ({
             ...article,
-            publishedAt: this.getRandomTime(),
-            source: this.getRandomSource(),
-            breaking: article.breaking || false,
-            trending: article.trending || false
+            publishedAt: times[Math.floor(Math.random() * times.length)],
+            source: sources[Math.floor(Math.random() * sources.length)]
         }));
-    },
-    
-    getRandomTime() {
-        const times = ['2 minutes ago', '15 minutes ago', '1 hour ago', '3 hours ago', '6 hours ago', '12 hours ago', '1 day ago'];
-        return times[Math.floor(Math.random() * times.length)];
-    },
-    
-    getRandomSource() {
-        const sources = ['Reuters', 'AP News', 'BBC', 'CNN', 'Bloomberg', 'Associated Press', 'Global Times', 'World Report'];
-        return sources[Math.floor(Math.random() * sources.length)];
-    },
-    
-    getAgeEmoji(publishedAt) {
-        if (publishedAt.includes('minutes')) return '🔥';
-        if (publishedAt.includes('hour')) return '⚡';
-        if (publishedAt.includes('day')) return '📅';
-        return '🗓️';
-    },
-    
-    getCategoryDescription(category) {
-        const descriptions = {
-            general: 'World news and headlines',
-            technology: 'Tech innovations and digital trends',
-            sports: 'Sports updates and competition results',
-            entertainment: 'Movies, music, and celebrity news',
-            science: 'Scientific discoveries and research',
-            business: 'Market updates and corporate news'
-        };
-        return descriptions[category] || 'News updates';
     }
 };

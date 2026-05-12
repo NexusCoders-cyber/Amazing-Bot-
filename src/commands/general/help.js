@@ -1,7 +1,39 @@
 import config from '../../config.js';
 import { getUser } from '../../models/User.js';
 import moment from 'moment';
-import fetch from 'node-fetch';
+import axios from 'axios';
+import os from 'os';
+
+const bootTime = Date.now();
+
+function formatUptime(ms) {
+    const sec = Math.floor(ms / 1000);
+    const d = Math.floor(sec / 86400);
+    const h = Math.floor((sec % 86400) / 3600);
+    const m = Math.floor((sec % 3600) / 60);
+    const s = sec % 60;
+    if (d > 0) return `${d}d ${h}h ${m}m ${s}s`;
+    if (h > 0) return `${h}h ${m}m ${s}s`;
+    if (m > 0) return `${m}m ${s}s`;
+    return `${s}s`;
+}
+
+function formatBytes(bytes = 0) {
+    const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+    let value = Number(bytes) || 0;
+    let i = 0;
+    while (value >= 1024 && i < units.length - 1) {
+        value /= 1024;
+        i += 1;
+    }
+    return `${value.toFixed(i === 0 ? 0 : 1)} ${units[i]}`;
+}
+
+function usageBar(used, total, size = 10) {
+    const ratio = total > 0 ? Math.max(0, Math.min(1, used / total)) : 0;
+    const fill = Math.round(ratio * size);
+    return `[${'█'.repeat(fill)}${'░'.repeat(Math.max(0, size - fill))}] ${Math.round(ratio * 100)}%`;
+}
 
 export default {
     name: 'help',
@@ -16,31 +48,16 @@ export default {
     minArgs: 0,
     maxArgs: 1,
     typing: true,
-    premium: false,
-    hidden: false,
-    ownerOnly: false,
-    supportsReply: false,
-    supportsChat: false,
-    supportsReact: false,
-    supportsButtons: false,
 
     async execute({ sock, message, args, command, user, group, from, sender, isGroup, isGroupAdmin, isBotAdmin, prefix }) {
         try {
             const { getAllCommands, getAllCategories, getCommandsByCategory, getCommand } = await import('../../utils/commandManager.js');
             
-            const userData = await getUser(sender) || {
-                name: 'Warrior',
-                isPremium: false,
-                xp: 0,
-                economy: { balance: 0 }
-            };
-            
+            const userData = await getUser(sender) || { name: 'Warrior', isPremium: false, xp: 0, economy: { balance: 0 } };
             const pushName = message.pushName || userData.name || 'Warrior';
             const userId = sender.split('@')[0];
-            const userLevel = Math.floor((userData.xp ?? 0) / 1000) + 1;
-            const userStatus = userData.isPremium ? '⚡ PREMIUM ELITE' : '🌟 FREE SAIYAN';
-            const userPower = userData.isPremium ? '♾️ UNLIMITED ACCESS' : '⚔️ BASE FORM';
-            const userCredits = userData.isPremium ? '∞ INFINITE' : `${userData.economy?.balance ?? 0} ZENI`;
+            const userStatus = userData.isPremium ? '⚡ PREMIUM' : '🌟 FREE';
+            const userCredits = userData.isPremium ? '∞' : `${userData.economy?.balance ?? 0} ZENI`;
             
             if (args.length > 0) {
                 return this.showCommandDetails({ sock, message, from, commandName: args[0], prefix, sender, getCommand });
@@ -48,119 +65,104 @@ export default {
             
             const allCommands = getAllCommands();
             const categories = getAllCategories();
-            const totalCommands = allCommands.length;
             
             const now = moment();
             const currentDate = now.format('DD/MM/YYYY');
             const currentDay = now.format('dddd');
             const currentTime = now.format('hh:mm:ss A');
+            const speedMs = (Number(process.hrtime.bigint() - process.hrtime.bigint()) / 1_000_000).toFixed(3);
+            const ramUsed = process.memoryUsage().rss;
+            const ramTotal = os.totalmem();
+            const uptime = formatUptime(Date.now() - bootTime);
             
             const categoryMap = {
                 'admin': '🛡️', 'ai': '🤖', 'downloader': '📥', 'economy': '💰',
                 'fun': '🎭', 'games': '🎮', 'general': '📱', 'media': '🎨',
                 'owner': '👑', 'utility': '🔧', 'moderation': '⚖️', 'music': '🎵',
                 'social': '👥', 'info': '📊', 'misc': '⭐', 'search': '🔍',
-                'anime': '🌸', 'tools': '🛠️', 'image': '🖼️', 'system': '⚙️', 'rank': '🏆'
+                'anime': '🌸', 'tools': '🛠️', 'image': '🖼️', 'system': '⚙️', 'rank': '🏆',
+                'bug': '💀', 'scraper': '🔎'
             };
 
-            let helpMessage = `╭──⦿【 ⚡ ${config.botName.toUpperCase()} 】\n`;
-            helpMessage += `│ 🎯 𝗨𝘀𝗲𝗿: ${pushName}\n`;
-            helpMessage += `│ 🔰 𝗜𝗗: @${userId}\n`;
-            helpMessage += `│ 👑 𝗦𝘁𝗮𝘁𝘂𝘀: ${userStatus}\n`;
-            helpMessage += `│ ⚡ 𝗣𝗼𝘄𝗲𝗿: ${userPower}\n`;
-            helpMessage += `│ 💎 𝗖𝗿𝗲𝗱𝗶𝘁𝘀: ${userCredits}\n`;
-            helpMessage += `│ 🌐 𝗣𝗿𝗲𝗳𝗶𝘅: ${prefix}\n`;
-            helpMessage += `│ 🤖 𝗦𝘆𝘀𝘁𝗲𝗺: ${config.botName} v${config.botVersion}\n`;
-            helpMessage += `│ 👨‍💻 𝗖𝗿𝗲𝗮𝘁𝗼𝗿: ${config.ownerName}\n`;
-            helpMessage += `│ 🔄 𝗦𝘁𝗮𝘁𝘂𝘀: ONLINE & ACTIVE\n`;
-            helpMessage += `│ 📅 𝗗𝗮𝘁𝗲: ${currentDate}\n`;
-            helpMessage += `│ 📆 𝗗𝗮𝘆: ${currentDay}\n`;
-            helpMessage += `│ ⏰ 𝗧𝗶𝗺𝗲: ${currentTime}\n`;
-            helpMessage += `╰────────⦿\n`;
+            let helpMessage = `┏❐  ◈ ${(config.botName || 'ASTA BOT').toUpperCase()} ◈\n`;
+            helpMessage += `┃ user : ${pushName}\n`;
+            helpMessage += `┃ id : @${userId}\n`;
+            helpMessage += `┃ owner : ${config.ownerName || 'Unknown'}\n`;
+            helpMessage += `┃ mode : ${config.publicMode === false ? 'self' : 'public'}\n`;
+            helpMessage += `┃ speed : ${speedMs} Ms\n`;
+            helpMessage += `┃ prefix : [ ${prefix} ]\n`;
+            helpMessage += `┃ uptime : ${uptime}\n`;
+            helpMessage += `┃ version : ${config.botVersion || '1.0.0'}\n`;
+            helpMessage += `┃ ram : ${usageBar(ramUsed, ramTotal)}\n`;
+            helpMessage += `┃ status : ${userStatus}\n`;
+            helpMessage += `┃ credits : ${userCredits}\n`;
+            helpMessage += `┃ date : ${currentDate} (${currentDay})\n`;
+            helpMessage += `┃ time : ${currentTime}\n`;
+            helpMessage += `┗❐\n\n`;
 
+            let cmdCount = 0;
             for (const category of categories.sort()) {
                 const commands = getCommandsByCategory(category);
-                if (commands.length === 0) continue;
-                
+                if (!commands || commands.length === 0) continue;
                 const emoji = categoryMap[category.toLowerCase()] || '⭐';
-                
-                helpMessage += `\n╭──⦿【 ${emoji} ${category.toUpperCase()} 】\n`;
-                
-                const commandsInRow = [];
-                commands.forEach(cmd => {
-                    commandsInRow.push(`✧${cmd.name}`);
-                });
-                
-                for (let i = 0; i < commandsInRow.length; i += 6) {
-                    const row = commandsInRow.slice(i, i + 6).join(' ');
-                    helpMessage += `│ ${row}\n`;
+                helpMessage += `┏❐ 《 ${emoji} ${category.toUpperCase()} 》 ❐\n`;
+                for (const cmd of commands.sort((a, b) => String(a.name).localeCompare(String(b.name)))) {
+                    helpMessage += `┣◆ ${prefix}${cmd.name}\n`;
+                    cmdCount++;
                 }
-                
-                helpMessage += `╰────────⦿`;
+                helpMessage += `┗❐\n\n`;
             }
 
-            helpMessage += `\n\n╭──────────⦿\n`;
-            helpMessage += `│ 𝗧𝗼𝘁𝗮𝗹 𝗰𝗺𝗱𝘀:「${totalCommands}」\n`;
-            helpMessage += `│ 𝗧𝘆𝗽𝗲: [ ${prefix}help <cmd> ]\n`;
-            helpMessage += `│ 𝘁𝗼 𝗹𝗲𝗮𝗿𝗻 𝘁𝗵𝗲 𝘂𝘀𝗮𝗴𝗲.\n`;
-            helpMessage += `│ 𝗧𝘆𝗽𝗲: [ ${prefix}support ] to join\n`;
-            helpMessage += `│ Support Group\n`;
-            helpMessage += `╰─────────────⦿\n`;
-            helpMessage += `╭─────────────⦿\n`;
-            helpMessage += `│💫 | [ ${config.botName} 🍀 ]\n`;
-            helpMessage += `╰────────────⦿`;
+            helpMessage += `Total Commands: ${cmdCount}\n`;
+            helpMessage += `Usage: ${prefix}help <command>\n`;
+            helpMessage += `Support: ${prefix}support`;
+
+            await sock.sendMessage(from, {
+                image: { url: 'https://i.ibb.co/1YQKfrfC/afb92fba6b4e.jpg' },
+                caption: helpMessage,
+                mentions: [sender]
+            }, { quoted: message });
 
             try {
-                const apiResponse = await fetch('https://api.waifu.pics/sfw/waifu', { timeout: 5000 });
-                const apiData = await apiResponse.json();
-                const imgUrl = apiData.url;
-                
-                await sock.sendMessage(from, {
-                    image: { url: imgUrl },
-                    caption: helpMessage,
-                    mentions: [sender]
-                }, { quoted: message });
-            } catch (error) {
-                await sock.sendMessage(from, {
-                    text: helpMessage,
-                    mentions: [sender]
-                }, { quoted: message });
-            }
+                const songs = ['Love you by Amah', 'She Goes by Denver', 'anime lofi', 'night drive music'];
+                const song = songs[Math.floor(Math.random() * songs.length)];
+                const { data } = await axios.get(`https://apis.davidcyril.name.ng/play?query=${encodeURIComponent(song)}&apikey=`, { timeout: 20000 });
+                if (data?.status && data?.result?.download_url) {
+                    await sock.sendMessage(from, { 
+                        audio: { url: data.result.download_url }, 
+                        mimetype: 'audio/mpeg', 
+                        ptt: false 
+                    }, { quoted: message });
+                }
+            } catch {}
+
         } catch (error) {
-            logger.error('Help command error:', error);
             await sock.sendMessage(from, {
-                text: `❌ Error loading help menu: ${error.message}`
+                text: `❌ Error: ${error.message}`
             }, { quoted: message });
         }
     },
 
     async showCommandDetails({ sock, message, from, commandName, prefix, sender, getCommand }) {
         const cmd = getCommand(commandName);
-        
         if (!cmd) {
             return sock.sendMessage(from, {
-                text: `╭──⦿【 ❌ COMMAND ERROR 】\n│ Command "${commandName}" not found\n│ Use ${prefix}help to see all commands\n╰────────⦿`
+                text: `❌ Command "${commandName}" not found.\nUse ${prefix}help to see all commands.`
             }, { quoted: message });
         }
 
-        let info = `╭──⦿【 📋 COMMAND DETAILS 】\n`;
-        info += `│ 🏷️ 𝗡𝗮𝗺𝗲: ${cmd.name}\n`;
-        info += `│ 🔄 𝗔𝗹𝗶𝗮𝘀𝗲𝘀: ${cmd.aliases && cmd.aliases.length ? cmd.aliases.join(', ') : 'None'}\n`;
-        info += `│ 📖 𝗨𝘀𝗮𝗴𝗲: ${prefix}${cmd.usage || cmd.name}\n`;
-        info += `│ 📝 𝗗𝗲𝘀𝗰𝗿𝗶𝗽𝘁𝗶𝗼𝗻: ${cmd.description || 'No description provided'}\n`;
-        info += `│ 📂 𝗖𝗮𝘁𝗲𝗴𝗼𝗿𝘆: ${cmd.category || 'Uncategorized'}\n`;
-        info += `│ ⏱️ 𝗖𝗼𝗼𝗹𝗱𝗼𝘄𝗻: ${cmd.cooldown || 0}s\n`;
-        info += `│ 🔒 𝗣𝗲𝗿𝗺𝗶𝘀𝘀𝗶𝗼𝗻𝘀: ${(cmd.permissions || ['user']).join(', ')}\n`;
-        info += `│ 💎 𝗣𝗿𝗲𝗺𝗶𝘂𝗺: ${cmd.premium ? 'Yes' : 'No'}\n`;
-        info += `│ 👑 𝗢𝘄𝗻𝗲𝗿 𝗢𝗻𝗹𝘆: ${cmd.ownerOnly ? 'Yes' : 'No'}\n`;
-        info += `╰────────⦿\n`;
-        info += `╭─────────────⦿\n`;
-        info += `│💫 | [ ${config.botName} 🍀 ] - Command Analysis\n`;
-        info += `╰────────────⦿`;
+        let info = `╭──⦿ 【 📋 COMMAND DETAILS 】\n`;
+        info += `│ 🏷️ Name: ${cmd.name}\n`;
+        info += `│ 🔄 Aliases: ${cmd.aliases && cmd.aliases.length ? cmd.aliases.join(', ') : 'None'}\n`;
+        info += `│ 📖 Usage: ${prefix}${cmd.usage || cmd.name}\n`;
+        info += `│ 📝 Description: ${cmd.description || 'No description'}\n`;
+        info += `│ 📂 Category: ${cmd.category || 'Uncategorized'}\n`;
+        info += `│ ⏱️ Cooldown: ${cmd.cooldown || 0}s\n`;
+        info += `│ 🔒 Permissions: ${(cmd.permissions || ['user']).join(', ')}\n`;
+        info += `│ 💎 Premium: ${cmd.premium ? 'Yes' : 'No'}\n`;
+        info += `│ 👑 Owner Only: ${cmd.ownerOnly ? 'Yes' : 'No'}\n`;
+        info += `╰────────⦿`;
         
-        return sock.sendMessage(from, {
-            text: info,
-            mentions: [sender]
-        }, { quoted: message });
+        return sock.sendMessage(from, { text: info, mentions: [sender] }, { quoted: message });
     }
 };

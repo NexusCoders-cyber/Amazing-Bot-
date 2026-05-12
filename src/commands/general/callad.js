@@ -48,7 +48,7 @@ export default {
             
             let ownerMessage = `📩 *NEW MESSAGE FROM USER*\n\n👤 From: ${senderName}\n📱 Number: @${senderNumber}\n💬 Chat Type: ${chatType}${groupInfo}\n🕐 Time: ${timestamp}\n\n━━━━━━━━━━━━━━━━━━\n\n💬 Message:\n"${messageText || 'See quoted message below'}"\n\n💡 Reply to this message to respond to the user`;
             
-            const ownerJid = config.ownerNumbers[0];
+            const ownerJids = [...new Set((config.ownerNumbers || []).filter(Boolean))];
             
             if (quotedMessage) {
                 const quotedText = quotedMessage.conversation || 
@@ -63,33 +63,41 @@ export default {
                     const imageBuffer = await sock.downloadMediaMessage({
                         message: { imageMessage: quotedMessage.imageMessage }
                     });
-                    
-                    await sock.sendMessage(ownerJid, {
-                        image: imageBuffer,
-                        caption: ownerMessage,
-                        mentions: [sender]
-                    });
+
+                    for (const ownerJid of ownerJids) {
+                        await sock.sendMessage(ownerJid, {
+                            image: imageBuffer,
+                            caption: ownerMessage,
+                            mentions: [sender]
+                        });
+                    }
                 } else if (quotedMessage.videoMessage) {
                     const videoBuffer = await sock.downloadMediaMessage({
                         message: { videoMessage: quotedMessage.videoMessage }
                     });
-                    
-                    await sock.sendMessage(ownerJid, {
-                        video: videoBuffer,
-                        caption: ownerMessage,
-                        mentions: [sender]
-                    });
+
+                    for (const ownerJid of ownerJids) {
+                        await sock.sendMessage(ownerJid, {
+                            video: videoBuffer,
+                            caption: ownerMessage,
+                            mentions: [sender]
+                        });
+                    }
                 } else {
+                    for (const ownerJid of ownerJids) {
+                        await sock.sendMessage(ownerJid, {
+                            text: ownerMessage,
+                            mentions: [sender]
+                        });
+                    }
+                }
+            } else {
+                for (const ownerJid of ownerJids) {
                     await sock.sendMessage(ownerJid, {
                         text: ownerMessage,
                         mentions: [sender]
                     });
                 }
-            } else {
-                await sock.sendMessage(ownerJid, {
-                    text: ownerMessage,
-                    mentions: [sender]
-                });
             }
             
             const successMessage = `✅ *MESSAGE SENT*\n\n📨 Your message has been sent to the bot owner\n⏰ Sent at: ${timestamp}\n\n💡 The owner will respond when available\n🙏 Thank you for contacting us!`;

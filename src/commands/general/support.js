@@ -11,27 +11,33 @@ export default {
 
     async execute({ sock, message, from }) {
         const supportGroup = config.supportGroup || 'https://chat.whatsapp.com/YOUR_GROUP_LINK';
-        
-        const supportText = `╭──⦿【 🆘 SUPPORT GROUP 】
+        const waChannel = 'https://whatsapp.com/channel/0029Vb8Pn1R65yDDeccQNH3j';
+        const telegramChannel = process.env.TELEGRAM_CHANNEL_LINK || 'https://t.me/primeee_official';
+        const telegramGroup = process.env.TELEGRAM_GROUP_LINK || 'https://t.me/+lmD9XlIGB742MmY0';
+
+        const supportText = `╭──⦿【 🌟 ILOM SUPPORT HUB 】
 │
-│ 💬 𝗡𝗲𝗲𝗱 𝗛𝗲𝗹𝗽?
-│ Join our support group for:
+│ 👋 Need help or latest updates?
+│ Follow and join our communities:
 │
-│ ✅ Bot assistance
-│ ✅ Feature requests
-│ ✅ Bug reports
-│ ✅ Updates & announcements
-│ ✅ Community support
+│ 📢 WhatsApp Channel
+│ ${waChannel}
 │
-│ 🔗 𝗚𝗿𝗼𝘂𝗽 𝗟𝗶𝗻𝗸:
+│ 💬 WhatsApp Support Group
 │ ${supportGroup}
 │
-│ 👨‍💻 𝗢𝘄𝗻𝗲𝗿: ${config.ownerName}
-│ 🌐 𝗪𝗲𝗯𝘀𝗶𝘁𝗲: ${config.botWebsite}
+│ ✈️ Telegram Channel
+│ ${telegramChannel}
+│
+│ 👥 Telegram Group
+│ ${telegramGroup}
+│
+│ 👨‍💻 Owner: ${config.ownerName}
+│ 🌐 Website: ${config.botWebsite}
 │
 ╰────────────⦿
 
-💡 Click the link above to join our community!`;
+Follow the ASTA BOT channel on WhatsApp and stay updated daily 🚀`;
 
         await sock.sendMessage(from, {
             text: supportText

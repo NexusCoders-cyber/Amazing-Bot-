@@ -1,6 +1,7 @@
 import logger from '../utils/logger.js';
 import config from '../config.js';
 import { getUser, updateUser } from '../models/User.js';
+import { getAutomationConfig } from '../utils/automationStore.js';
 
 const autoReactKeywords = {
     '❤️': ['love', 'heart', 'cute', 'beautiful', 'amazing'],
@@ -27,6 +28,8 @@ const autoReactKeywords = {
 
 export default async function handleAutoReaction(sock, message) {
     try {
+        if (!getAutomationConfig().autoReact) return;
+
         const messageText = message.message?.conversation || 
                            message.message?.extendedTextMessage?.text || '';
         

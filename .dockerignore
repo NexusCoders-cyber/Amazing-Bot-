@@ -1,0 +1,14 @@
+.git
+.github
+node_modules
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.env
+.env.*
+logs
+cache
+temp
+session
+backups
+attached_assets

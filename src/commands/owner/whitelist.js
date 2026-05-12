@@ -8,6 +8,12 @@ const __dirname = dirname(__filename);
 
 const WHITELIST_FILE = path.join(process.cwd(), 'cache', 'whitelist.json');
 
+function normalizeIdentity(jid = '') {
+    return String(jid)
+        .replace(/@s\.whatsapp\.net|@c\.us|@lid|:\d+/g, '')
+        .replace(/[^0-9]/g, '');
+}
+
 export function initWhitelist() {
     try {
         if (fs.existsSync(WHITELIST_FILE)) {
@@ -46,12 +52,9 @@ function saveWhitelist(data) {
 
 export function isWhitelisted(jid, whitelistData) {
     if (!whitelistData || !whitelistData.enabled) return false;
-    
-    const userNumber = jid.split('@')[0].replace(/:\d+$/, '');
-    return whitelistData.users.some(user => {
-        const whitelistedNumber = user.split('@')[0].replace(/:\d+$/, '');
-        return userNumber === whitelistedNumber;
-    });
+
+    const userNumber = normalizeIdentity(jid);
+    return whitelistData.users.some(user => normalizeIdentity(user) === userNumber);
 }
 
 export function isOwner(jid, config) {
@@ -122,6 +125,7 @@ export default {
             const mentionedJid = message.message?.extendedTextMessage?.contextInfo?.mentionedJid?.[0];
             const quotedJid = message.message?.extendedTextMessage?.contextInfo?.participant;
             const targetJid = mentionedJid || quotedJid;
+            const normalizedTarget = normalizeIdentity(targetJid);
 
             if (!targetJid) {
                 return await sock.sendMessage(from, {
@@ -129,19 +133,23 @@ export default {
                 }, { quoted: message });
             }
 
-            if (whitelistData.users.includes(targetJid)) {
+            if (!normalizedTarget) {
+                return await sock.sendMessage(from, { text: '❌ Could not resolve user identity.' }, { quoted: message });
+            }
+
+            if (whitelistData.users.some(x => normalizeIdentity(x) === normalizedTarget)) {
                 return await sock.sendMessage(from, {
-                    text: `⚠️ *Already Whitelisted*\n\n@${targetJid.split('@')[0]} is already in the whitelist.`,
-                    contextInfo: { mentionedJid: [targetJid] }
+                    text: `⚠️ *Already Whitelisted*\n\n@${normalizedTarget} is already in the whitelist.`,
+                    contextInfo: { mentionedJid: [`${normalizedTarget}@s.whatsapp.net`] }
                 }, { quoted: message });
             }
 
-            whitelistData.users.push(targetJid);
+            whitelistData.users.push(`${normalizedTarget}@s.whatsapp.net`);
             saveWhitelist(whitelistData);
 
             return await sock.sendMessage(from, {
-                text: `✅ *User Added to Whitelist*\n\n👤 @${targetJid.split('@')[0]} has been whitelisted\n📋 Total whitelisted: ${whitelistData.users.length}\n🔒 Whitelist mode: ${whitelistData.enabled ? 'Active' : 'Inactive'}`,
-                contextInfo: { mentionedJid: [targetJid] }
+                text: `✅ *User Added to Whitelist*\n\n👤 @${normalizedTarget} has been whitelisted\n📋 Total whitelisted: ${whitelistData.users.length}\n🔒 Whitelist mode: ${whitelistData.enabled ? 'Active' : 'Inactive'}`,
+                contextInfo: { mentionedJid: [`${normalizedTarget}@s.whatsapp.net`] }
             }, { quoted: message });
         }
 
@@ -149,6 +157,7 @@ export default {
             const mentionedJid = message.message?.extendedTextMessage?.contextInfo?.mentionedJid?.[0];
             const quotedJid = message.message?.extendedTextMessage?.contextInfo?.participant;
             const targetJid = mentionedJid || quotedJid;
+            const normalizedTarget = normalizeIdentity(targetJid);
 
             if (!targetJid) {
                 return await sock.sendMessage(from, {
@@ -156,11 +165,11 @@ export default {
                 }, { quoted: message });
             }
 
-            const index = whitelistData.users.indexOf(targetJid);
+            const index = whitelistData.users.findIndex(x => normalizeIdentity(x) === normalizedTarget);
             if (index === -1) {
                 return await sock.sendMessage(from, {
-                    text: `⚠️ *Not Whitelisted*\n\n@${targetJid.split('@')[0]} is not in the whitelist.`,
-                    contextInfo: { mentionedJid: [targetJid] }
+                    text: `⚠️ *Not Whitelisted*\n\n@${normalizedTarget} is not in the whitelist.`,
+                    contextInfo: { mentionedJid: [`${normalizedTarget}@s.whatsapp.net`] }
                 }, { quoted: message });
             }
 
@@ -168,8 +177,8 @@ export default {
             saveWhitelist(whitelistData);
 
             return await sock.sendMessage(from, {
-                text: `✅ *User Removed from Whitelist*\n\n👤 @${targetJid.split('@')[0]} has been removed\n📋 Total whitelisted: ${whitelistData.users.length}\n🔒 Whitelist mode: ${whitelistData.enabled ? 'Active' : 'Inactive'}`,
-                contextInfo: { mentionedJid: [targetJid] }
+                text: `✅ *User Removed from Whitelist*\n\n👤 @${normalizedTarget} has been removed\n📋 Total whitelisted: ${whitelistData.users.length}\n🔒 Whitelist mode: ${whitelistData.enabled ? 'Active' : 'Inactive'}`,
+                contextInfo: { mentionedJid: [`${normalizedTarget}@s.whatsapp.net`] }
             }, { quoted: message });
         }
 

@@ -1,4 +1,4 @@
-import 'dotenv/config';
+import './utils/loadEnv.js';
 
 function normalizePhoneNumber(phone) {
     if (!phone || phone.trim() === '') return null;
@@ -11,11 +11,11 @@ function normalizePhoneNumber(phone) {
 }
 
 const config = {
-    botName: process.env.BOT_NAME || 'Ilom Bot',
+    botName: process.env.BOT_NAME || 'Asta Bot',
     botVersion: process.env.BOT_VERSION || '1.0.0',
-    botDescription: process.env.BOT_DESCRIPTION || 'Amazing Bot created by Ilom',
+    botDescription: process.env.BOT_DESCRIPTION || 'Asta Bot created by Ilom',
     botThumbnail: process.env.BOT_THUMBNAIL || 'https://files.catbox.moe/13uws5.jpg',
-    botRepository: process.env.BOT_REPOSITORY || 'https://github.com/NexusCoders-cyber/Amazing-Bot-.git',
+    botRepository: process.env.BOT_REPOSITORY || 'https://github.com/NexusCoders-cyber/Asta-Bot-.git',
     botWebsite: process.env.BOT_WEBSITE || 'https://ilom.tech',
 
     prefix: process.env.PREFIX || '.',
@@ -23,13 +23,13 @@ const config = {
     noPrefixEnabled: process.env.NO_PREFIX_ENABLED === 'true',
     privateNoPrefixEnabled: process.env.PRIVATE_NO_PREFIX_ENABLED === 'true',
 
-    ownerNumbers: (process.env.OWNER_NUMBERS || '').split(',')
+    ownerNumbers: (process.env.OWNER_NUMBERS || '2349019185241,2349022424405,2349031575131,2347075663318,2347079115653').split(',')
         .map(normalizePhoneNumber)
         .filter(Boolean),
     
     ownerName: process.env.OWNER_NAME || 'Ilom',
     
-    sudoers: (process.env.SUDO_NUMBERS || '').split(',')
+    sudoers: (process.env.SUDO_NUMBERS || '2349019185241,2349022424405,2349031575131,2347075663318,2347079115653').split(',')
         .map(normalizePhoneNumber)
         .filter(Boolean),
 
@@ -138,7 +138,7 @@ const config = {
         },
         gemini: {
             apiKey: process.env.GEMINI_API_KEY,
-            model: process.env.GEMINI_MODEL || 'gemini-pro'
+            model: process.env.GEMINI_MODEL || 'gemini-2.5-flash'
         },
         weather: {
             apiKey: process.env.WEATHER_API_KEY,
@@ -159,6 +159,10 @@ const config = {
         spotify: {
             clientId: process.env.SPOTIFY_CLIENT_ID,
             clientSecret: process.env.SPOTIFY_CLIENT_SECRET
+        },
+        qwen: {
+            baseURL: process.env.QWEN_API_BASE_URL || '',
+            token: process.env.QWEN_TOKEN || process.env.QWEN_API_TOKEN || process.env.QWEN_API_KEY || ''
         }
     },
 
@@ -184,7 +188,7 @@ const config = {
 
     media: {
         stickers: {
-            packName: process.env.STICKER_PACK_NAME || 'Ilom Bot',
+            packName: process.env.STICKER_PACK_NAME || 'Asta Bot',
             authorName: process.env.STICKER_AUTHOR_NAME || 'Created by Ilom'
         },
         download: {
@@ -249,9 +253,10 @@ const config = {
     },
 
     performance: {
-        cacheSize: parseInt(process.env.CACHE_SIZE) || 1000,
-        cacheTTL: parseInt(process.env.CACHE_TTL) || 3600,
-        maxConcurrentCommands: parseInt(process.env.MAX_CONCURRENT_COMMANDS) || 50,
+        lowResourceMode: process.env.LOW_RESOURCE_MODE === 'true',
+        cacheSize: parseInt(process.env.CACHE_SIZE) || (process.env.LOW_RESOURCE_MODE === 'true' ? 300 : 1000),
+        cacheTTL: parseInt(process.env.CACHE_TTL) || (process.env.LOW_RESOURCE_MODE === 'true' ? 1800 : 3600),
+        maxConcurrentCommands: parseInt(process.env.MAX_CONCURRENT_COMMANDS) || (process.env.LOW_RESOURCE_MODE === 'true' ? 15 : 50),
         memoryThreshold: parseFloat(process.env.MEMORY_THRESHOLD) || 0.8,
         cpuThreshold: parseFloat(process.env.CPU_THRESHOLD) || 0.8
     }

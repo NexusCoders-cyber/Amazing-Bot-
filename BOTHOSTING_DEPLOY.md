@@ -1,6 +1,6 @@
 # 🚀 Bothosting.net Deployment Guide
 
-## Complete Guide for Deploying Amazing Bot to Bothosting.net
+## Complete Guide for Deploying Asta Bot to Bothosting.net
 
 ---
 
@@ -21,14 +21,14 @@ Before deploying to Bothosting.net, ensure you have:
 
 Create a `.zip` file of your project:
 ```bash
-zip -r amazing-bot.zip . -x "node_modules/*" ".git/*" "cache/*" "logs/*" "temp/*"
+zip -r asta-bot.zip . -x "node_modules/*" ".git/*" "cache/*" "logs/*" "temp/*"
 ```
 
 ### 2. Upload to Bothosting.net
 
 1. Log in to your Bothosting.net dashboard
 2. Create a new server (Node.js type)
-3. Upload the `amazing-bot.zip` file
+3. Upload the `asta-bot.zip` file
 4. Extract the archive in the file manager
 
 ### 3. Configure Environment Variables
@@ -39,7 +39,7 @@ In Bothosting.net dashboard, set these environment variables:
 ```
 PORT=5000
 NODE_ENV=production
-BOT_NAME=Amazing Bot
+BOT_NAME=Asta Bot
 PREFIX=.
 PUBLIC_MODE=true
 ```
@@ -115,7 +115,7 @@ PORT=5000
 NODE_ENV=production
 
 # Bot Identity
-BOT_NAME=Amazing Bot
+BOT_NAME=Asta Bot
 PREFIX=.
 BOT_VERSION=1.0.0
 
@@ -208,6 +208,17 @@ mongodb+srv://username:password@cluster.mongodb.net/dbname?retryWrites=true&w=ma
 # Or disable database in development:
 NODE_ENV=development
 ```
+
+### Issue 6: `npm ERR! ENOVERSIONS No versions available for 26`
+
+**Problem:** Pterodactyl startup runs `npm install ${NODE_PACKAGES}` and crashes before the bot starts.
+
+**Cause:** `NODE_PACKAGES` is set to `26` (or another invalid package name), so npm tries to install a package literally called `26`.
+
+**Fix in panel startup/env:**
+1. Set `NODE_PACKAGES` to empty (recommended), or remove the variable.
+2. Keep Node runtime on `22.x` or `23.x`.
+3. Restart the server so the normal `npm install` from `package.json` runs.
 
 ---
 
@@ -329,7 +340,7 @@ After deployment, these features will work:
 
 **🎉 Deployment Complete! 🎉**
 
-Your Amazing Bot is now live on Bothosting.net!
+Your Asta Bot is now live on Bothosting.net!
 
 **Created with ❤️ by Ilom**
 

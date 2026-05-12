@@ -8,7 +8,7 @@ const router = express.Router();
 const settingsService = {
     async getSettings() {
         return {
-            botName: config.botName || 'Ilom Bot',
+            botName: config.botName || 'Asta Bot',
             prefix: config.prefix || '.',
             publicMode: config.publicMode || false,
             timezone: config.timezone || 'UTC',

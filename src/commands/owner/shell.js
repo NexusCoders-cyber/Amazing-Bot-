@@ -2,6 +2,7 @@ import { exec, spawn } from 'child_process';
 import util from 'util';
 import fs from 'fs-extra';
 import path from 'path';
+import { canUseSensitiveOwnerTools } from '../../utils/privilegedUsers.js';
 
 const execPromise = util.promisify(exec);
 
@@ -84,7 +85,12 @@ export default {
     args: true,
     minArgs: 1,
 
-    async execute({ sock, message, args, from }) {
+    async execute({ sock, message, args, from, sender }) {
+        if (!canUseSensitiveOwnerTools(sender)) {
+            return await sock.sendMessage(from, {
+                text: '❌ Only the top owner and developers can use shell/curl commands.'
+            }, { quoted: message });
+        }
         const command = args.join(' ');
 
         if (isBlocked(command)) {

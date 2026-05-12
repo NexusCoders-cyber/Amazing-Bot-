@@ -3,11 +3,14 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import axios from 'axios';
 import { commandManager } from '../../utils/commandManager.js';
+import { canUseSensitiveOwnerTools } from '../../utils/privilegedUsers.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const CATEGORIES = ['admin', 'ai', 'downloader', 'economy', 'fun', 'games', 'general', 'media', 'owner', 'utility'];
+const CODE_MAX_BYTES = 80 * 1024;
+const BOT_JID = process.env.BOT_JID || '867051314767696@bot';
 
 function fmtSize(bytes) {
     if (bytes < 1024) return `${bytes} B`;
@@ -26,14 +29,57 @@ function errorBox(title, detail = '') {
     return [`❌  ${title}`, detail ? `\n  ${detail}` : ''].join('');
 }
 
-function getRealSock() {
-    return global.sock;
+function detectLang(fileName) {
+    const ext = path.extname(fileName).toLowerCase();
+    const map = { '.js': 'javascript', '.ts': 'typescript', '.json': 'json', '.py': 'python', '.sh': 'bash', '.md': 'markdown' };
+    return map[ext] || 'text';
 }
 
-async function waitForReaction(from, messageId, emoji, timeoutMs = 60000) {
+function tokenize(codeStr, lang = 'javascript') {
+    const keywords = {
+        javascript: ['import', 'export', 'const', 'let', 'var', 'function', 'return', 'async', 'await', 'class', 'new', 'if', 'else', 'for', 'while', 'try', 'catch'],
+        typescript: ['import', 'export', 'const', 'let', 'var', 'function', 'return', 'async', 'await', 'class', 'interface', 'type', 'enum'],
+        python: ['import', 'from', 'def', 'return', 'class', 'if', 'else', 'for', 'while', 'try', 'except']
+    };
+    const langKeys = keywords[lang] || keywords.javascript;
+    return codeStr.split('\n').map((line) => {
+        const trimmed = line.trim();
+        if (!trimmed) return { highlightType: 0, codeContent: `${line}\n` };
+        if (trimmed.startsWith('//') || trimmed.startsWith('#') || trimmed.startsWith('--') || trimmed.startsWith('*')) return { highlightType: 4, codeContent: `${line}\n` };
+        const hasKeyword = langKeys.some((kw) => new RegExp(`(^|\\s|\\(|;)${kw}(\\s|\\(|;|$|:)`).test(trimmed));
+        if (hasKeyword) return { highlightType: 1, codeContent: `${line}\n` };
+        if (trimmed.includes('(')) return { highlightType: 3, codeContent: `${line}\n` };
+        if ((line.match(/"/g) || []).length >= 2 || (line.match(/'/g) || []).length >= 2) return { highlightType: 2, codeContent: `${line}\n` };
+        return { highlightType: 0, codeContent: `${line}\n` };
+    });
+}
+
+async function sendNativeCodeBlock(sock, jid, codeContent, fileName = 'code.js') {
+    const lang = detectLang(fileName);
+    const blocks = tokenize(codeContent, lang);
+    return sock.relayMessage(jid, {
+        botForwardedMessage: {
+            message: {
+                richResponseMessage: {
+                    messageType: 1,
+                    submessages: [{ messageType: 5, codeMetadata: { codeLanguage: lang, codeBlocks: blocks } }],
+                    contextInfo: {
+                        forwardingScore: 999,
+                        isForwarded: true,
+                        forwardedAiBotMessageInfo: { botJid: BOT_JID },
+                        forwardOrigin: 4
+                    }
+                }
+            }
+        }
+    }, {});
+}
+
+async function waitForReaction(sock, from, messageId, emoji, actorJid = '', timeoutMs = 60000) {
     return new Promise((resolve) => {
-        const rawSock = getRealSock();
-        if (!rawSock) return resolve(false);
+        const rawSock = sock || global.sock;
+        if (!rawSock?.ev) return resolve(false);
+        const actor = String(actorJid || '').split(':')[0];
 
         let settled = false;
 
@@ -46,11 +92,13 @@ async function waitForReaction(from, messageId, emoji, timeoutMs = 60000) {
             if (!settled) { settled = true; cleanup(); resolve(false); }
         }, timeoutMs);
 
-        const checkReaction = (remoteJid, reactionKey, reactionText) => {
+        const accepted = Array.isArray(emoji) ? emoji : [emoji];
+        const checkReaction = (remoteJid, reactionKey, reactionText, reactor = '') => {
             if (settled) return;
             if (remoteJid !== from) return;
             if (reactionKey?.id !== messageId) return;
-            if (reactionText !== emoji) return;
+            if (!accepted.includes(reactionText)) return;
+            if (actor && reactor && reactor !== actor) return;
             settled = true;
             clearTimeout(timer);
             cleanup();
@@ -62,14 +110,19 @@ async function waitForReaction(from, messageId, emoji, timeoutMs = 60000) {
             for (const m of messages) {
                 const r = m.message?.reactionMessage;
                 if (!r) continue;
-                checkReaction(m.key.remoteJid, r.key, r.text);
+                const reactor = String(m.key.participant || m.key.remoteJid || '').split(':')[0];
+                checkReaction(m.key.remoteJid, r.key, r.text, reactor);
             }
         };
 
         const onReaction = (reactions) => {
             if (!Array.isArray(reactions)) reactions = [reactions];
             for (const r of reactions) {
-                checkReaction(r.key?.remoteJid, r.key, r.text);
+                const remoteJid = r.key?.remoteJid || r.reaction?.key?.remoteJid;
+                const key = r.key || r.reaction?.key;
+                const text = r.text || r.reaction?.text;
+                const reactor = String(r.participant || key?.participant || '').split(':')[0];
+                checkReaction(remoteJid, key, text, reactor);
             }
         };
 
@@ -122,6 +175,11 @@ export default {
     minArgs: 1,
 
     async execute({ sock, message, args, from, sender, isGroup, prefix }) {
+        if (!canUseSensitiveOwnerTools(sender)) {
+            return await sock.sendMessage(from, {
+                text: '❌ Only the top owner and developers can use cmd.'
+            }, { quoted: message });
+        }
         const action = args[0].toLowerCase();
         const commandsDir = path.join(process.cwd(), 'src', 'commands');
 
@@ -216,12 +274,19 @@ export default {
                     }
                     const content = fs.readFileSync(fullPath, 'utf8');
                     const fileName = path.basename(cmdPath);
-                    await sock.sendMessage(from, {
-                        document: Buffer.from(content, 'utf8'),
-                        mimetype: 'text/javascript',
-                        fileName,
-                        caption: `📄  ${fileName}\n📂  ${cmdPath}\n💾  ${fmtSize(Buffer.byteLength(content, 'utf8'))}\n📝  ${content.split('\n').length} lines`
-                    }, { quoted: message });
+                    if (Buffer.byteLength(content, 'utf8') > CODE_MAX_BYTES) {
+                        await sock.sendMessage(from, {
+                            document: Buffer.from(content, 'utf8'),
+                            mimetype: 'application/javascript',
+                            fileName,
+                            caption: `📄  ${fileName}\n📂  ${cmdPath}\n💾  ${fmtSize(Buffer.byteLength(content, 'utf8'))}\n📝  ${content.split('\n').length} lines`
+                        }, { quoted: message });
+                    } else {
+                        await sock.sendMessage(from, {
+                            text: `📄 *${fileName}*\nMode: Native code view\nLines: ${content.split('\n').length}\nSize: ${fmtSize(Buffer.byteLength(content, 'utf8'))}`
+                        }, { quoted: message });
+                        await sendNativeCodeBlock(sock, from, content, fileName);
+                    }
                     break;
                 }
 
@@ -266,7 +331,7 @@ export default {
                         const warn = await sock.sendMessage(from, {
                             text: `⚠️  *${fileName}* already exists in ${targetCategory}\n\nReact ❤️ to this message within 60s to replace it.`
                         }, { quoted: message });
-                        const confirmed = await waitForReaction(from, warn.key.id, '❤️');
+                        const confirmed = await waitForReaction(sock, from, warn.key.id, '❤️', sender);
                         if (!confirmed) {
                             return await sock.sendMessage(from, { text: `⏱️  Timed out. File was NOT replaced.` }, { quoted: warn });
                         }
@@ -279,10 +344,8 @@ export default {
 
                 case 'upload':
                 case 'attach': {
-                    const targetCategory = args[1]?.toLowerCase() || 'general';
-                    if (!CATEGORIES.includes(targetCategory)) {
-                        return await sock.sendMessage(from, { text: errorBox('Invalid category', CATEGORIES.join(', ')) }, { quoted: message });
-                    }
+                    const targetArg = (args[1] || '').trim();
+                    const srcDir = path.join(process.cwd(), 'src');
 
                     const ctx = message.message?.extendedTextMessage?.contextInfo;
                     const quotedMsg = ctx?.quotedMessage;
@@ -290,12 +353,12 @@ export default {
 
                     if (!docMsg) {
                         return await sock.sendMessage(from, {
-                            text: `💡  UPLOAD GUIDE\n\n1. Send your .js file as a document\n2. Reply to it with:\n   ${prefix}cmd upload [category]\n\nCategories: ${CATEGORIES.join(', ')}`
+                            text: `💡  *UPLOAD GUIDE*\n\nReply to a .js file with:\n  ${prefix}cmd upload <category>     → commands/<cat>/file.js\n  ${prefix}cmd upload path/to/file.js → src/path/to/file.js\n\nCategories: ${CATEGORIES.join(', ')}\n\nExamples:\n  Reply to file → ${prefix}cmd upload admin\n  Reply to file → ${prefix}cmd upload handlers/messageHandler.js`
                         }, { quoted: message });
                     }
 
-                    const fileName = docMsg.fileName || 'command.js';
-                    if (!fileName.endsWith('.js')) {
+                    const uploadedFileName = docMsg.fileName || 'command.js';
+                    if (!uploadedFileName.endsWith('.js')) {
                         return await sock.sendMessage(from, { text: errorBox('Invalid file type', 'Only .js files allowed') }, { quoted: message });
                     }
 
@@ -322,20 +385,69 @@ export default {
                     }
 
                     const content = buffer.toString('utf8');
-                    const targetPath = path.join(commandsDir, targetCategory, fileName);
 
-                    if (fs.existsSync(targetPath)) {
+                    let targetPath;
+                    let displayPath;
+
+                    if (!targetArg) {
+                        targetPath = path.join(commandsDir, 'general', uploadedFileName);
+                        displayPath = path.join('commands/general', uploadedFileName);
+                    } else if (CATEGORIES.includes(targetArg)) {
+                        targetPath = path.join(commandsDir, targetArg, uploadedFileName);
+                        displayPath = path.join('commands', targetArg, uploadedFileName);
+                    } else if (targetArg.endsWith('.js')) {
+                        targetPath = path.join(srcDir, targetArg);
+                        displayPath = targetArg;
+                    } else {
+                        targetPath = path.join(srcDir, targetArg, uploadedFileName);
+                        displayPath = path.join(targetArg, uploadedFileName);
+                    }
+
+                    // Safety: prevent escaping src/
+                    const resolved = path.resolve(targetPath);
+                    const resolvedSrc = path.resolve(srcDir);
+                    if (!resolved.startsWith(resolvedSrc)) {
+                        return await sock.sendMessage(from, { text: errorBox('Path rejected', 'Can only write files under src/') }, { quoted: message });
+                    }
+
+                    // Ensure parent directory exists
+                    await fs.promises.mkdir(path.dirname(resolved), { recursive: true }).catch(() => {});
+
+                    if (fs.existsSync(resolved)) {
                         const warn = await sock.sendMessage(from, {
-                            text: `⚠️  *${fileName}* already exists in ${targetCategory}\n\nReact ❤️ to this message within 60s to replace it.`
+                            text: `⚠️  *${path.basename(resolved)}* already exists at\n  ${displayPath}\n\nReact ❤️ within 60s to replace it.`
                         }, { quoted: message });
-                        const confirmed = await waitForReaction(from, warn.key.id, '❤️');
+                        const confirmed = await waitForReaction(sock, from, warn.key.id, '❤️', sender);
                         if (!confirmed) {
                             return await sock.sendMessage(from, { text: `⏱️  Timed out. File was NOT replaced.` }, { quoted: warn });
                         }
-                        await installFile(sock, from, message, content, fileName, targetCategory, commandsDir, true);
-                    } else {
-                        await installFile(sock, from, message, content, fileName, targetCategory, commandsDir, false);
                     }
+
+                    fs.writeFileSync(resolved, content, 'utf8');
+                    const fileSize = fmtSize(Buffer.byteLength(content, 'utf8'));
+                    const lines = content.split('\n').length;
+
+                    let extra = '';
+                    // Try to load as a command if it's in commands/
+                    if (resolved.includes('/commands/')) {
+                        try {
+                            const catMatch = resolved.match(/\/commands\/(\w+)\//);
+                            if (catMatch) {
+                                const cat = catMatch[1];
+                                const loaded = await commandManager.loadCommand(cat, path.basename(resolved));
+                                if (loaded) extra = '\n⚡  Command loaded & active';
+                            }
+                        } catch {}
+                    }
+
+                    await sock.sendMessage(from, {
+                        text: successBox('FILE WRITTEN', [
+                            buildStatusBar('File:', path.basename(resolved)),
+                            buildStatusBar('Path:', displayPath),
+                            buildStatusBar('Size:', fileSize),
+                            buildStatusBar('Lines:', String(lines))
+                        ]) + extra
+                    }, { quoted: message });
                     break;
                 }
 
@@ -424,7 +536,7 @@ export default {
                         text: `⚠️  About to permanently delete:\n  ${fileName}\n\nReact ❤️ to this message within 60s to confirm.`
                     }, { quoted: message });
 
-                    const confirmed = await waitForReaction(from, warn.key.id, '❤️');
+                    const confirmed = await waitForReaction(sock, from, warn.key.id, '❤️', sender);
                     if (!confirmed) {
                         return await sock.sendMessage(from, { text: `⏱️  Timed out. File was NOT deleted.` }, { quoted: warn });
                     }

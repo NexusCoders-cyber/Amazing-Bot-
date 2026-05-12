@@ -9,20 +9,8 @@ export default {
     usage: 'upload <filename.ext> (reply to message with content)',
     example: 'Reply to code message and type: upload mycode.js',
     cooldown: 5,
-    permissions: ['user'],
-    args: true,
-    minArgs: 1,
-    maxArgs: 1,
-    typing: true,
-    premium: false,
-    hidden: false,
-    ownerOnly: false,
-    supportsReply: false,
-    supportsChat: false,
-    supportsReact: true,
-    supportsButtons: false,
 
-    async execute({ sock, message, args, command, user, group, from, sender, isGroup, isGroupAdmin, isBotAdmin, prefix }) {
+    async execute({ sock, message, args, prefix, from }) {
         try {
             const fileName = args[0].trim();
 
@@ -31,26 +19,7 @@ export default {
 
             if (!quotedText) {
                 await sock.sendMessage(from, {
-                    text: `╭──⦿【 💡 UPLOAD GUIDE 】
-│ 𝗛𝗼𝘄 𝘁𝗼 𝘂𝘀𝗲:
-│
-│ 1. Send or find a text message
-│ 2. Reply to it with:
-│    ${prefix}upload <filename>
-│
-│ 📝 𝗘𝘅𝗮𝗺𝗽𝗹𝗲𝘀:
-│ ${prefix}upload code.js
-│ ${prefix}upload notes.txt
-│ ${prefix}upload config.json
-│
-│ 📋 𝗦𝘂𝗽𝗽𝗼𝗿𝘁𝗲𝗱 𝗳𝗶𝗹𝗲𝘀:
-│ .js .txt .json .md .css .html
-│ .xml .yml .env .py .java .cpp
-╰────────⦿
-
-╭─────────────⦿
-│💫 | [ Ilom Bot 🍀 ]
-╰────────────⦿`
+                    text: `╭──⦿【 💡 UPLOAD GUIDE 】\n│ Usage:\n│ ${prefix}upload <filename>\n│\n│ Example:\n│ ${prefix}upload code.js\n│ ${prefix}upload notes.txt\n│ ${prefix}upload config.json\n╰────────⦿`
                 }, { quoted: message });
                 return;
             }
@@ -60,28 +29,12 @@ export default {
             
             if (!fileName.includes('.') || invalidChars.test(fileName) || traversalCheck.test(fileName)) {
                 await sock.sendMessage(from, {
-                    text: `╭──⦿【 ❌ ERROR 】
-│ 𝗠𝗲𝘀𝘀𝗮𝗴𝗲: Invalid filename
-│
-│ ❌ 𝗜𝗻𝘃𝗮𝗹𝗶𝗱: ${fileName}
-│
-│ ✅ 𝗩𝗮𝗹𝗶𝗱 𝗲𝘅𝗮𝗺𝗽𝗹𝗲𝘀:
-│ • myfile.js
-│ • notes.txt
-│ • config.json
-│
-│ 🚫 𝗔𝘃𝗼𝗶𝗱:
-│ • Special characters: < > : " / \\ | ? *
-│ • Path traversal: ../
-│ • Missing extension
-╰────────⦿`
+                    text: `╭──⦿【 ❌ ERROR 】\n│ Invalid filename: ${fileName}\n│\n│ Valid examples:\n│ • myfile.js\n│ • notes.txt\n│ • config.json\n╰────────⦿`
                 }, { quoted: message });
                 return;
             }
 
-            await sock.sendMessage(from, {
-                react: { text: '📤', key: message.key }
-            });
+            await sock.sendMessage(from, { react: { text: '📤', key: message.key } });
 
             const content = quotedText;
             const fileSizeBytes = Buffer.byteLength(content, 'utf8');
@@ -89,27 +42,17 @@ export default {
             
             if (fileSizeBytes > 5 * 1024 * 1024) {
                 await sock.sendMessage(from, {
-                    text: `╭──⦿【 ❌ ERROR 】
-│ 𝗠𝗲𝘀𝘀𝗮𝗴𝗲: File too large
-│
-│ 📦 𝗦𝗶𝘇𝗲: ${fileSizeMB.toFixed(2)} MB
-│ 🚫 𝗟𝗶𝗺𝗶𝘁: 5 MB
-│
-│ 💡 Reduce message size
-╰────────⦿`
+                    text: `╭──⦿【 ❌ ERROR 】\n│ File too large\n│ Size: ${fileSizeMB.toFixed(2)} MB\n│ Limit: 5 MB\n╰────────⦿`
                 }, { quoted: message });
                 return;
             }
 
             const tempDir = path.join(process.cwd(), 'temp');
-            const timestamp = Date.now();
-            const safeFileName = `${timestamp}_${fileName}`;
-            const tempFilePath = path.join(tempDir, safeFileName);
-
             if (!fs.existsSync(tempDir)) {
                 fs.mkdirSync(tempDir, { recursive: true });
             }
 
+            const tempFilePath = path.join(tempDir, fileName);
             fs.writeFileSync(tempFilePath, content, 'utf8');
 
             const fileStats = fs.statSync(tempFilePath);
@@ -142,52 +85,19 @@ export default {
                 document: fileBuffer,
                 mimetype: mimeType,
                 fileName: fileName,
-                caption: `╭──⦿【 ✅ FILE CREATED 】
-│ 📄 𝗙𝗶𝗹𝗲: ${fileName}
-│ 💾 𝗦𝗶𝘇𝗲: ${fileSizeKB} KB
-│ 📝 𝗟𝗶𝗻𝗲𝘀: ${lines}
-│ 📊 𝗪𝗼𝗿𝗱𝘀: ${words}
-│ 🔤 𝗖𝗵𝗮𝗿𝗮𝗰𝘁𝗲𝗿𝘀: ${chars}
-│ 📦 𝗧𝘆𝗽𝗲: ${mimeType}
-╰────────⦿
-
-╭──⦿【 📋 CONTENT PREVIEW 】
-│ ${content.substring(0, 100)}${content.length > 100 ? '...' : ''}
-╰────────⦿
-
-╭─────────────⦿
-│💫 | [ Ilom Bot 🍀 ]
-╰────────────⦿`
+                caption: `╭──⦿【 ✅ FILE CREATED 】\n│ 📄 File: ${fileName}\n│ 💾 Size: ${fileSizeKB} KB\n│ 📝 Lines: ${lines}\n│ 📊 Words: ${words}\n│ 🔤 Characters: ${chars}\n│ 📦 Type: ${mimeType}\n╰────────⦿\n\n╭──⦿【 📋 PREVIEW 】\n│ ${content.substring(0, 100)}${content.length > 100 ? '...' : ''}\n╰────────⦿`
             }, { quoted: message });
 
-            try {
-                fs.unlinkSync(tempFilePath);
-                const remainingFiles = fs.readdirSync(tempDir);
-                if (remainingFiles.length === 0) {
-                    fs.rmdirSync(tempDir);
-                }
-            } catch (cleanupError) {
-                console.warn('Cleanup warning:', cleanupError.message);
-            }
+            fs.unlinkSync(tempFilePath);
 
-            await sock.sendMessage(from, {
-                react: { text: '✅', key: message.key }
-            });
+            await sock.sendMessage(from, { react: { text: '✅', key: message.key } });
 
         } catch (error) {
             console.error('Upload command error:', error);
             await sock.sendMessage(from, {
-                text: `╭──⦿【 ❌ ERROR 】
-│ 𝗠𝗲𝘀𝘀𝗮𝗴𝗲: Upload failed
-│
-│ ⚠️ 𝗗𝗲𝘁𝗮𝗶𝗹𝘀: ${error.message}
-│ 💡 Try again
-╰────────⦿`
+                text: `╭──⦿【 ❌ ERROR 】\n│ Upload failed\n│ Details: ${error.message}\n╰────────⦿`
             }, { quoted: message });
-            
-            await sock.sendMessage(from, {
-                react: { text: '❌', key: message.key }
-            });
+            await sock.sendMessage(from, { react: { text: '❌', key: message.key } });
         }
     }
 };

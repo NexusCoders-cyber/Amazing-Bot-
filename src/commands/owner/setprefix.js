@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import { getSessionControl, updateSessionControl } from '../../utils/sessionControl.js';
 
 export default {
     name: 'setprefix',
@@ -17,9 +18,9 @@ export default {
     async execute({ sock, message, from, args }) {
         const newPrefix = args[0];
 
-        if (newPrefix.length > 3) {
+        if (newPrefix.length > 5 || /\s/.test(newPrefix)) {
             return await sock.sendMessage(from, {
-                text: 'Prefix must be 1-3 characters long.'
+                text: 'Prefix must be 1-5 non-space characters.'
             }, { quoted: message });
         }
 
@@ -31,14 +32,15 @@ export default {
         }
 
         const config = (await import('../../config.js')).default;
-        const oldPrefix = config.prefix;
-        config.prefix = newPrefix;
+        const oldPrefix = (await getSessionControl(sock)).prefix || config.prefix;
+        await updateSessionControl(sock, { prefix: newPrefix });
 
         try {
             const SettingsModel = mongoose.model('Settings');
+            const sid = sock?.user?.id || 'default';
             await SettingsModel.findOneAndUpdate(
-                { key: 'prefix' },
-                { key: 'prefix', value: newPrefix },
+                { key: `prefix_${sid}` },
+                { key: `prefix_${sid}`, value: newPrefix },
                 { upsert: true }
             );
         } catch {}

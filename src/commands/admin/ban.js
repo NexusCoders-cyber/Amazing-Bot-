@@ -39,14 +39,14 @@ export default {
     botAdminRequired: true,
 
     async execute({ sock, message, from, sender, args }) {
-        const target = getTarget(message);
+        const target = getTarget(message) || (args.find((a) => /@/.test(a))?.replace(/[^0-9]/g, '') ? `${args.find((a) => /@/.test(a)).replace(/[^0-9]/g, '')}@s.whatsapp.net` : null);
         if (!target) return await sock.sendMessage(from, { text: '❌ Mention or reply to a user to ban.' }, { quoted: message });
 
         const bot = botJid(sock);
         if (normNum(target) === normNum(bot)) return await sock.sendMessage(from, { text: "❌ I can't ban myself." }, { quoted: message });
         if (normNum(target) === normNum(sender)) return await sock.sendMessage(from, { text: "❌ You can't ban yourself." }, { quoted: message });
 
-        const reason = args.filter(a => !a.startsWith('@')).join(' ') || 'No reason provided';
+        const reason = args.slice(1).join(' ').trim() || 'No reason provided';
 
         try {
             const p = await getParticipant(sock, from, target);

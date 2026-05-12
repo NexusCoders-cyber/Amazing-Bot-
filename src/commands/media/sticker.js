@@ -1,5 +1,8 @@
 import { Sticker, StickerTypes } from "wa-sticker-formatter";
 import { downloadContentFromMessage } from "@whiskeysockets/baileys";
+import fs from 'fs-extra';
+import os from 'os';
+import path from 'path';
 
 async function downloadMedia(msg) {
     const messageType = Object.keys(msg)[0];
@@ -9,6 +12,19 @@ async function downloadMedia(msg) {
         buffer = Buffer.concat([buffer, chunk]);
     }
     return buffer;
+}
+
+async function cleanupStickerTemp() {
+    const tmp = os.tmpdir();
+    const targets = ['wa-sticker-formatter', 'sticker', 'webp'];
+    try {
+        const entries = await fs.readdir(tmp);
+        for (const e of entries) {
+            if (targets.some(t => e.toLowerCase().includes(t))) {
+                await fs.remove(path.join(tmp, e)).catch(() => {});
+            }
+        }
+    } catch {}
 }
 
 export default {
@@ -94,6 +110,9 @@ export default {
 
         } catch (error) {
             console.error('Sticker creation error:', error);
+            if (/No space left on device|ENOSPC/i.test(error.message || '')) {
+                await cleanupStickerTemp();
+            }
             
             await sock.sendMessage(from, {
                 react: { text: '❌', key: message.key }

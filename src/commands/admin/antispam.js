@@ -15,6 +15,13 @@ export async function checkSpam(sock, message) {
     if (!cfg?.enabled) return false;
 
     const sender = message.key.participant || message.key.remoteJid;
+    try {
+        const meta = await sock.groupMetadata(from);
+        const normalizedSender = sender.split(':')[0].split('@')[0];
+        const participant = meta.participants.find(p => p.id.split(':')[0].split('@')[0] === normalizedSender);
+        if (participant?.admin) return false;
+    } catch {}
+
     const key = `${from}_${sender}`;
     const now = Date.now();
     const windowMs = (cfg.windowSeconds || 5) * 1000;

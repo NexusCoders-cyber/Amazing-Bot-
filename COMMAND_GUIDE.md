@@ -254,4 +254,4 @@ Both commands are **production-ready** and **fully functional**:
 
 ---
 
-💫 **Ilom Bot 🍀** - Powered by Advanced Command Systems
+💫 **Asta Bot 🍀** - Powered by Advanced Command Systems

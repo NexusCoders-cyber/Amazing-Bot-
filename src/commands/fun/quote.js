@@ -154,7 +154,7 @@ export default {
             ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
             ctx.font = 'bold 28px Arial';
             ctx.textAlign = 'center';
-            ctx.fillText('ILOM BOT', canvas.width / 2, canvas.height - 80);
+            ctx.fillText('ASTA BOT', canvas.width / 2, canvas.height - 80);
 
             const buffer = canvas.toBuffer('image/png');
             const tempPath = path.join(process.cwd(), 'temp', `quote_${Date.now()}.png`);
@@ -187,7 +187,7 @@ export default {
 ╰────────⦿
 
 ╭─────────────⦿
-│💫 | [ Ilom Bot 🍀 ]
+│💫 | [ Asta Bot 🍀 ]
 ╰────────────⦿`
             }, { quoted: message });
 

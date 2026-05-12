@@ -1,6 +1,6 @@
 # Command Template Guide
 
-This guide provides standardized templates for creating commands in the Amazing Bot. Follow these patterns to ensure consistency and proper functionality.
+This guide provides standardized templates for creating commands in the Asta Bot. Follow these patterns to ensure consistency and proper functionality.
 
 ---
 
@@ -1100,6 +1100,6 @@ const progressBar = '█'.repeat(Math.floor(percentage / 10)) + '░'.repeat(10 
 
 ---
 
-*Template Guide for Amazing Bot v1.0.0*
+*Template Guide for Asta Bot v1.0.0*
 *Last Updated: October 2025*
 *Follow these templates to maintain code quality and consistency across all commands*

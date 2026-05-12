@@ -1,111 +1,52 @@
 import axios from 'axios';
-import config from '../../config.js';
+import FormData from 'form-data';
+
+async function uploadQuotedImage(sock, message) {
+  try {
+    const quoted = message.message?.extendedTextMessage?.contextInfo?.quotedMessage;
+    if (!quoted) return null;
+    const has = quoted.imageMessage || quoted.stickerMessage;
+    if (!has) return null;
+    const media = await sock.downloadMediaMessage({ message: quoted });
+    const form = new FormData();
+    form.append('file', media, { filename: 'image.jpg' });
+    form.append('type', 'permanent');
+    const { data } = await axios.post('https://tmp.malvryx.dev/upload', form, { headers: form.getHeaders(), timeout: 60000 });
+    return data?.cdnUrl || data?.directUrl || null;
+  } catch { return null; }
+}
 
 export default {
-    name: 'flux',
-    aliases: ['fluxpro', 'img', 'generate'],
-    category: 'ai',
-    description: 'Generate image using Flux Pro AI',
-    usage: 'flux <prompt>',
-    example: 'flux a cute cat in space',
-    cooldown: 10,
-    permissions: ['user'],
-    args: true,
-    minArgs: 1,
-    maxArgs: Infinity,
-    typing: true,
-    premium: false,
-    hidden: false,
-    ownerOnly: false,
-    supportsReply: false,
-    supportsChat: false,
-    supportsReact: true,
-    supportsButtons: false,
-
-    async execute(options) {
-        const {
-            sock,
-            message,
-            args,
-            from,
-            sender,
-            prefix
-        } = options;
-
-        try {
-            const prompt = args.join(' ').trim();
-
-            if (!prompt) {
-                return await sock.sendMessage(from, {
-                    text: `Usage: ${prefix}flux <image prompt>\n\nExample: ${prefix}flux a futuristic city at night`
-                }, { quoted: message });
-            }
-
-            // React to user's message
-            await sock.sendMessage(from, {
-                react: { text: '🖼️', key: message.key }
-            });
-
-            // Send processing message
-            const statusMsg = await sock.sendMessage(from, {
-                text: '⏳ Generating image with Flux Pro...'
-            }, { quoted: message });
-
-            // API call - assuming returns JSON with 'imageUrl' or direct binary
-            const apiUrl = `https://arychauhann.onrender.com/api/fluxpro?prompt=${encodeURIComponent(prompt)}`;
-            const { data } = await axios.get(apiUrl, {
-                timeout: 60000, // Longer timeout for image gen
-                headers: {
-                    'User-Agent': 'Mozilla/5.0'
-                },
-                responseType: 'arraybuffer' // For binary image
-            });
-
-            // If JSON with url, fetch url; assume direct image buffer
-            let imageBuffer;
-            if (typeof data === 'object' && data.imageUrl) {
-                // Fetch from url
-                const imgRes = await axios.get(data.imageUrl, { responseType: 'arraybuffer' });
-                imageBuffer = Buffer.from(imgRes.data);
-            } else {
-                // Direct buffer
-                imageBuffer = Buffer.from(data);
-            }
-
-            // Send image
-            await sock.sendMessage(from, {
-                image: imageBuffer,
-                caption: `Generated with Flux Pro: "${prompt}"`,
-                mimetype: 'image/png' // Assume PNG
-            }, { quoted: message });
-
-            // Edit status to done or remove
-            await sock.sendMessage(from, {
-                text: '✅ Image generated!',
-                edit: statusMsg.key
-            }, { quoted: message });
-
-            // Success react
-            await sock.sendMessage(from, {
-                react: { text: '✅', key: message.key }
-            });
-
-        } catch (error) {
-            console.error('Flux command error:', error);
-
-            const errorMsg = error.code === 'ECONNABORTED'
-                ? 'Generation timeout - Try a simpler prompt'
-                : error.response?.status === 429
-                ? 'Rate limit exceeded - try again in a moment'
-                : error.message || 'Unknown error occurred';
-
-            await sock.sendMessage(from, {
-                text: `Failed to generate image\n\nError: ${errorMsg}\nTry again in a moment`
-            }, { quoted: message });
-
-            await sock.sendMessage(from, {
-                react: { text: '❌', key: message.key }
-            });
-        }
+  name: 'flux', aliases: ['fluxedit'], category: 'ai', description: 'Flux 2 pro image generation/edit', usage: 'flux <prompt>', cooldown: 5,
+  async execute({ sock, message, from, args, command, prefix }) {
+    const prompt = args.join(' ').trim();
+    if (!prompt) return sock.sendMessage(from, { text: `⚠️ Usage: ${prefix}${command} <prompt>` }, { quoted: message });
+    await sock.sendMessage(from, { react: { text: '🎨', key: message.key } });
+    try {
+      const imageUrl = await uploadQuotedImage(sock, message);
+      const baseUrl = 'https://omegatech-api.dixonomega.tech/api/ai';
+      let initRes;
+      if (imageUrl) {
+        const { data } = await axios.post(`${baseUrl}/flux-pro2-edit`, { image1: imageUrl, prompt, aspect_ratio: 'auto' }, { timeout: 60000 });
+        initRes = data;
+      } else {
+        const { data } = await axios.get(`${baseUrl}/flux-pro2`, { params: { prompt }, timeout: 60000 });
+        initRes = data;
+      }
+      if (!initRes?.success || !initRes?.task_id) throw new Error('API failed to start task');
+      let resultUrl = null;
+      for (let i = 0; i < 25; i++) {
+        await new Promise((r) => setTimeout(r, 5000));
+        const { data: check } = await axios.get(`${baseUrl}/nano-banana2-result`, { params: { task_id: initRes.task_id }, timeout: 40000 });
+        if (check?.status === 'completed' && check?.image_url) { resultUrl = check.image_url; break; }
+        if (check?.status === 'failed') throw new Error('Task failed on server');
+      }
+      if (!resultUrl) throw new Error('Generation timed out');
+      await sock.sendMessage(from, { image: { url: resultUrl }, caption: `✨ *FLUX 2 PRO SUCCESS*\n\n📝 *Prompt:* ${prompt}` }, { quoted: message });
+      await sock.sendMessage(from, { react: { text: '✅', key: message.key } });
+    } catch (e) {
+      await sock.sendMessage(from, { react: { text: '❌', key: message.key } });
+      await sock.sendMessage(from, { text: `❌ *Error:* ${e.response?.data?.error || e.message}` }, { quoted: message });
     }
+  }
 };

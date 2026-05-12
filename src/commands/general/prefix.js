@@ -1,17 +1,7 @@
 import config from '../../config.js';
-import Settings from '../../models/Settings.js';
+import { getSessionControl, updateSessionControl } from '../../utils/sessionControl.js';
 
-const VALID_PREFIXES = /^[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?~`.]{1,5}$/;
-
-async function savePrefix(newPrefix) {
-    try {
-        await Settings.findOneAndUpdate(
-            { key: 'prefix' },
-            { key: 'prefix', value: newPrefix },
-            { upsert: true, new: true }
-        );
-    } catch {}
-}
+const VALID_PREFIXES = /^\S{1,5}$/;
 
 export default {
     name: 'prefix',
@@ -26,9 +16,11 @@ export default {
     noPrefix: true,
 
     async execute({ sock, message, args, from, prefix, isOwner }) {
+        const sessionControl = await getSessionControl(sock);
+        const activePrefix = sessionControl.prefix || prefix || config.prefix;
         if (args.length === 0) {
             return await sock.sendMessage(from, {
-                text: `⚙️ *Bot Prefix*\n\nCurrent prefix: *${config.prefix}*\n\nUsage: ${config.prefix}prefix <new prefix>\nExample: ${config.prefix}prefix !`
+                text: `⚙️ *Bot Prefix*\n\nCurrent prefix: *${activePrefix}*\n\nUsage: ${activePrefix}prefix <new prefix>\nExample: ${activePrefix}prefix !`
             }, { quoted: message });
         }
 
@@ -42,16 +34,15 @@ export default {
 
         if (!VALID_PREFIXES.test(newPrefix)) {
             return await sock.sendMessage(from, {
-                text: `❌ Invalid prefix.\n\nPrefix must be 1-5 special characters.\nExample: ! . # $ @`
+                text: `❌ Invalid prefix.\n\nPrefix must be 1-5 non-space characters.`
             }, { quoted: message });
         }
 
-        const oldPrefix = config.prefix;
-        config.prefix = newPrefix;
-        await savePrefix(newPrefix);
+        const oldPrefix = activePrefix;
+        await updateSessionControl(sock, { prefix: newPrefix });
 
         await sock.sendMessage(from, {
-            text: `✅ *Prefix Updated*\n\nOld prefix: *${oldPrefix}*\nNew prefix: *${newPrefix}*\n\nAll commands now use: *${newPrefix}help*`
+            text: `✅ *Prefix Updated*\n\nOld prefix: *${oldPrefix}*\nNew prefix: *${newPrefix}*\n\nThis session now uses: *${newPrefix}help*`
         }, { quoted: message });
     }
 };

@@ -55,24 +55,55 @@ const winstonLogger = winston.createLogger({
     exitOnError: false
 });
 
+function compactMeta(meta) {
+    if (!meta) return '';
+    if (meta instanceof Error) return meta.stack || meta.message || String(meta);
+    if (typeof meta === 'string') return meta;
+    if (typeof meta === 'object') {
+        if (typeof meta.message === 'string' && meta.message.trim()) return meta.message;
+        if (typeof meta.stack === 'string' && meta.stack.trim()) return meta.stack.split('\n')[0];
+        try {
+            return JSON.stringify(meta);
+        } catch {
+            return '[object]';
+        }
+    }
+    return String(meta);
+}
+
+function formatMessage(message, meta) {
+    const base = String(message || '');
+    const extra = compactMeta(meta).trim();
+    if (!extra) return base;
+    if (base.includes(extra)) return base;
+    return `${base} ${extra}`;
+}
+
 const logger = {
-    info: (message, meta) => winstonLogger.info(message, meta || {}),
+    info: (message, meta) => winstonLogger.info(formatMessage(message, meta)),
     error: (message, meta) => {
-        winstonLogger.error(message, meta || {});
+        const finalMessage = formatMessage(message, meta);
+        winstonLogger.error(finalMessage);
         if (process.env.NODE_ENV === 'production' && global.sock) {
             const cfg = global._config;
             if (cfg?.ownerNumbers?.length) {
-                const errMsg = `Bot Error:\n${message}\n${meta?.message || ''}`.substring(0, 500);
+                const errMsg = `Bot Error:\n${finalMessage}`.substring(0, 500);
                 for (const owner of cfg.ownerNumbers) {
                     global.sock.sendMessage(owner, { text: errMsg }).catch(() => {});
                 }
             }
         }
     },
-    warn: (message, meta) => winstonLogger.warn(message, meta || {}),
-    debug: (message, meta) => winstonLogger.debug(message, meta || {}),
-    verbose: (message, meta) => winstonLogger.verbose(message, meta || {}),
-    http: (message, meta) => winstonLogger.http(message, meta || {}),
+    warn: (message, meta) => winstonLogger.warn(formatMessage(message, meta)),
+    debug: (message, meta) => winstonLogger.debug(formatMessage(message, meta)),
+    verbose: (message, meta) => winstonLogger.verbose(formatMessage(message, meta)),
+    http: (message, meta) => winstonLogger.http(formatMessage(message, meta)),
+    logAPI: (method, path, statusCode, responseTime, userAgent = '') => {
+        const status = Number(statusCode) || 0;
+        const level = status >= 500 ? 'error' : status >= 400 ? 'warn' : 'http';
+        const ua = String(userAgent || '').slice(0, 120);
+        winstonLogger.log(level, `${method} ${path} ${status} ${responseTime}ms ${ua}`.trim());
+    },
     cleanup: async () => {
         try {
             const files = await fs.readdir(logDir);

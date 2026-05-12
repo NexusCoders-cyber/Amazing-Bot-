@@ -105,7 +105,7 @@ export default {
             ctx.textAlign = 'center';
             ctx.shadowColor = 'rgba(0, 255, 136, 0.8)';
             ctx.shadowBlur = 20;
-            ctx.fillText(config.botName || 'ILOM BOT', canvas.width / 2, 180);
+            ctx.fillText(config.botName || 'ASTA BOT', canvas.width / 2, 180);
             ctx.shadowBlur = 0;
 
             ctx.font = '40px Arial';
@@ -230,7 +230,7 @@ export default {
             const categoryCount = categories.length || 10;
 
             const aboutText = '╭──⦿【 🤖 ABOUT BOT 】\n' +
-                '│ 🎯 𝗕𝗼𝘁 𝗡𝗮𝗺𝗲: ' + (config.botName || 'Ilom Bot') + '\n' +
+                '│ 🎯 𝗕𝗼𝘁 𝗡𝗮𝗺𝗲: ' + (config.botName || 'Asta Bot') + '\n' +
                 '│ 📌 𝗩𝗲𝗿𝘀𝗶𝗼𝗻: ' + (config.botVersion || '1.0.0') + '\n' +
                 '│ 👨‍💻 𝗗𝗲𝘃𝗲𝗹𝗼𝗽𝗲𝗿: ' + (config.ownerName || 'Ilom') + '\n' +
                 '│ 🌐 𝗣𝗹𝗮𝘁𝗳𝗼𝗿𝗺: ' + process.platform + '\n' +
@@ -255,7 +255,7 @@ export default {
                 '│ ✧ 📊 Analytics\n' +
                 '╰────────⦿\n\n' +
                 '╭─────────────⦿\n' +
-                '│💫 | [ ' + (config.botName || 'Ilom Bot') + ' 🍀 ]\n' +
+                '│💫 | [ ' + (config.botName || 'Asta Bot') + ' 🍀 ]\n' +
                 '│ Built with ❤️ by ' + (config.ownerName || 'Ilom') + '\n' +
                 '╰────────────⦿';
 
